@@ -15,6 +15,16 @@ uv run --with jsonschema .github/workflows/build_registry.py --dry-run
 python .github/workflows/build_registry.py
 ```
 
+## Virtual environment (uv-managed)
+
+All agents share this registry, so the venv contract is shared too: run tooling
+inside a uv-managed venv. The local runners (`run-workflows-tests.sh`,
+`run-protocol-matrix.sh`) warn when `VIRTUAL_ENV` is unset and, when `uv` is
+available, create a uv-managed `.venv` in `.github/workflows/` via
+`ensure-uv-venv.sh`. Dependencies stay ephemeral (`uv run --with ...`); the
+venv exists so every agent can detect and activate a managed environment
+instead of silently running on the host interpreter.
+
 ## Testing & Linting
 
 ```bash
