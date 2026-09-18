@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+. "$SCRIPT_DIR/ensure-uv-venv.sh"
+ensure_uv_venv "$SCRIPT_DIR/.."
 TABLE_MODE="${ACP_PROTOCOL_MATRIX_TABLE_MODE:-capabilities}"
 SKIP_AGENTS="${ACP_PROTOCOL_MATRIX_SKIP_AGENTS:-}"
 KEEP_STATE="${ACP_PROTOCOL_MATRIX_KEEP_STATE:-0}"
