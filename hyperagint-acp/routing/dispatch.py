@@ -168,18 +168,23 @@ def cmd_resolve(xp, as_json):
 
 
 def send_probe(url, headers, payload, timeout):
-    """POST the probe. Returns (status_or_None, detail). status None = unreachable."""
+    """POST the probe. Returns (status_or_None, detail, body_bytes).
+
+    status None = unreachable (no HTTP response at all). Any HTTP response
+    proves the route is up end to end; the caller decides whether the status
+    counts as healthy (the fallback walker advances past 5xx).
+    """
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", **headers}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, "http %s from %s" % (resp.status, url)
+            return resp.status, "http %s from %s" % (resp.status, url), resp.read()
     except urllib.error.HTTPError as e:
         # Any HTTP response (even 4xx/5xx) proves the route is UP end to end.
-        return e.code, "http %s (route up, endpoint answered) %s" % (e.code, url)
+        return e.code, "http %s (route up, endpoint answered) %s" % (e.code, url), e.read()
     except (urllib.error.URLError, socket.timeout, OSError) as e:
-        return None, "unreachable %s (%s)" % (url, e.__class__.__name__)
+        return None, "unreachable %s (%s)" % (url, e.__class__.__name__), None
 
 
 def cmd_probe(xp, node_name, timeout):
@@ -201,7 +206,11 @@ def cmd_probe(xp, node_name, timeout):
         if not url:
             trace.append("  %s: no url in entry -> skip" % hop)
             continue
-        status, detail = send_probe(url, headers, {"probe": "hyperagint-routing", "node": node_name}, timeout)
+        status, detail, _body = send_probe(
+            url, headers, {"probe": "hyperagint-routing", "node": node_name}, timeout)
+        if status and status >= 500:
+            trace.append("  %s: degraded - %s (route up, service error; trying next hop)" % (hop, detail))
+            continue
         mark = "REACHABLE" if status else "down"
         trace.append("  %s: %s - %s" % (hop, mark, detail))
         if status:
@@ -215,7 +224,10 @@ def cmd_probe(xp, node_name, timeout):
 
 class _Echo(BaseHTTPRequestHandler):
     def do_POST(self):
-        received = {k: v for k, v in self.headers.items() if k.lower().startswith("hyperagint")}
+        # urllib capitalizes stored header names, so the wire form is
+        # "X-hyperagint-registry-commit" (RFC 9110: case-insensitive). Match
+        # by case-insensitive substring - never by prefix or exact case.
+        received = {k: v for k, v in self.headers.items() if "hyperagint" in k.lower()}
         body = json.dumps({"received_headers": received}).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -238,22 +250,29 @@ def cmd_echo_verify(xp, port):
             for p in problems:
                 print("PROVENANCE ERROR: %s" % p, file=sys.stderr)
             return 4
-        status, detail = send_probe(
+        status, detail, body = send_probe(
             "http://127.0.0.1:%d/" % bound, headers,
             {"probe": "header-construction-proof"}, timeout=5)
         print("LOCAL HEADER-CONSTRUCTION PROOF (echo server on 127.0.0.1:%d - not tailnet transit)" % bound)
         print("probe result: %s" % detail)
-        print("sent HYPERAGINT headers (from entry policy):")
-        for k in sorted(headers):
-            print("  %s: %s" % (k, headers[k]))
-        print("received back by echo server: see probe body below")
-        req = urllib.request.Request(
-            "http://127.0.0.1:%d/" % bound, data=json.dumps({"probe": 1}).encode(),
-            headers={"Content-Type": "application/json", **headers}, method="POST")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            print(json.dumps(json.load(resp), indent=2))
-        ok = all(headers[k] for k in headers)
-        print("VERDICT: %s" % ("all provenance headers present on the wire" if ok else "MISSING HEADERS"))
+        if status != 200 or body is None:
+            print("VERDICT: FAIL - echo server did not answer cleanly", file=sys.stderr)
+            return 4
+        expected = {k.lower(): v for k, v in headers.items()}
+        received = {k.lower(): v for k, v in
+                    json.loads(body.decode("utf-8")).get("received_headers", {}).items()}
+        print("closed-loop check (entry policy vs headers received on the wire):")
+        ok = True
+        for name in sorted(expected):
+            got = received.get(name)
+            match = got == expected[name]
+            ok = ok and match
+            print("  %s:" % name)
+            print("    expected: %s" % expected[name])
+            print("    received: %s [%s]" % (got, "match" if match else "MISMATCH"))
+        print("VERDICT: %s" % (
+            "provenance headers verified on the wire (echo round-trip)" if ok
+            else "FAIL - wire headers do not match entry policy"))
         return 0 if ok else 4
     finally:
         server.shutdown()
