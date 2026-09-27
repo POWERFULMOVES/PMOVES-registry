@@ -20,7 +20,7 @@ re-implemented (registry-first doctrine).
 
 | Field | Value |
 |-------|-------|
-| Grounding registry commit | `4b05abb` (branch point of the HyPeRAGInT build; verified ancestor) |
+| Grounding registry commit | `4b05abb` (grounding commit of the HyPeRAGInT build; verified ancestor — the branch point is `a5cc072`, next row) |
 | Entry authored on | `a5cc072` (latest `origin/main` of POWERFULMOVES/PMOVES-registry at authoring time) |
 | Branch | `feat/hyperagint-registry-entry` |
 | Task | `t_0a9c4bcb` (identity layer; parent root card `t_f8b3ad71`) |
