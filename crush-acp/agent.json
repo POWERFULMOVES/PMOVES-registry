@@ -1,8 +1,8 @@
 {
   "id": "crush-acp",
   "name": "Crush",
-  "version": "0.91.2-pmoves.1",
-  "description": "ACP adapter for Charm's Crush terminal coding assistant (PMOVES fork: `crush acp` speaks stable ACP v1 JSON-RPC over stdio, with session resume and streamed agent_message_chunk updates)",
+  "version": "0.91.2-pmoves.2",
+  "description": "ACP adapter for Charm's Crush terminal coding assistant (PMOVES fork): 'crush acp' speaks stable ACP v1 JSON-RPC over stdio with streamed agent_message_chunk updates and session resume across adapter restarts; end-to-end canary verified against the live provider chain.",
   "repository": "https://github.com/POWERFULMOVES/PMOVES-crush",
   "website": "https://github.com/POWERFULMOVES/PMOVES-crush/blob/main/PMOVES.AI_INTEGRATION.md#acp-server-crush-acp-added-2026-09-27",
   "authors": [
@@ -14,40 +14,52 @@
   "distribution": {
     "binary": {
       "darwin-aarch64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Darwin_arm64.tar.gz",
-        "sha256": "75490da8449d19e0f90b53b8f456d61000b7725950f46d0298630133705a2848",
-        "cmd": "./crush_0.91.2-pmoves.1_Darwin_arm64/crush",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Darwin_arm64.tar.gz",
+        "sha256": "6afb06f6069687efee7d830562fb658c87246adb0ea6a76910e0e69a53b33336",
+        "cmd": "./crush_0.91.2-pmoves.2_Darwin_arm64/crush",
+        "args": [
+          "acp"
+        ]
       },
       "darwin-x86_64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Darwin_x86_64.tar.gz",
-        "sha256": "28299d2d06efa88bca608249468ab6753caf9569c1e1ab1984acaefbe2218527",
-        "cmd": "./crush_0.91.2-pmoves.1_Darwin_x86_64/crush",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Darwin_x86_64.tar.gz",
+        "sha256": "8d1cf76fc4950539b4df4bbd0fb7239f2ec7ce12b9334e1b2897186422bdef70",
+        "cmd": "./crush_0.91.2-pmoves.2_Darwin_x86_64/crush",
+        "args": [
+          "acp"
+        ]
       },
       "linux-aarch64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Linux_arm64.tar.gz",
-        "sha256": "1923e830e9c5f95dd79c6872ae9bd1025ec2c58d04cb3a1659682780e71b437a",
-        "cmd": "./crush_0.91.2-pmoves.1_Linux_arm64/crush",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Linux_arm64.tar.gz",
+        "sha256": "d4dc36e8f90d5c769097085b338cc08945e7becba21897c0913ad71e300a5aec",
+        "cmd": "./crush_0.91.2-pmoves.2_Linux_arm64/crush",
+        "args": [
+          "acp"
+        ]
       },
       "linux-x86_64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Linux_x86_64.tar.gz",
-        "sha256": "cbee770a5b07c80e1d90b601079f22eca21bc77cdd6b6a11db03e918d849e89a",
-        "cmd": "./crush_0.91.2-pmoves.1_Linux_x86_64/crush",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Linux_x86_64.tar.gz",
+        "sha256": "d87b5d9be596956f1b531893d5ffd7cba11d377a932b54166ac3dff248854f5f",
+        "cmd": "./crush_0.91.2-pmoves.2_Linux_x86_64/crush",
+        "args": [
+          "acp"
+        ]
       },
       "windows-arm64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Windows_arm64.zip",
-        "sha256": "397c19b2a40f40fa0592ba4e14f4ad0d711bb449bfb0a88cd6685b3d51139ea6",
-        "cmd": "./crush_0.91.2-pmoves.1_Windows_arm64/crush.exe",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Windows_arm64.zip",
+        "sha256": "5ce7c1c7ba0979b726e0a467e3e7065b565de903ee8b4f6bd5d83c8d80fc4fb9",
+        "cmd": "./crush_0.91.2-pmoves.2_Windows_arm64/crush.exe",
+        "args": [
+          "acp"
+        ]
       },
       "windows-x86_64": {
-        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.1/crush_0.91.2-pmoves.1_Windows_x86_64.zip",
-        "sha256": "2ca5ef36e04c7d43ff08e257808e3d657ab7606720c8369c4a4e3214fe43b772",
-        "cmd": "./crush_0.91.2-pmoves.1_Windows_x86_64/crush.exe",
-        "args": ["acp"]
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Windows_x86_64.zip",
+        "sha256": "da87774244d89c43b4bb22cc1713725d182172a38b5a62c0ea73dd0f8300229f",
+        "cmd": "./crush_0.91.2-pmoves.2_Windows_x86_64/crush.exe",
+        "args": [
+          "acp"
+        ]
       }
     }
   }
