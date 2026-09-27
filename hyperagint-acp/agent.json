@@ -43,26 +43,59 @@
       {
         "node": "elder",
         "mode": "cloud-first",
-        "suit": "suit-elder"
+        "suit": "suit-elder",
+        "url": "https://elder-melchor-1.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "observed MagicDNS host elder-melchor-1 (IP 100.81.62.125 via tailscale status) + tailnet tailcad9b4 (live pilot URL in PMOVES.AI docs)"
       },
       {
         "node": "z890",
         "mode": "local-hermes3",
-        "suit": "suit-z890"
+        "suit": "suit-z890",
+        "url": "https://z890.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "PROVISIONAL short-name guess - node MagicDNS name never observed (tailscale down at authoring); verify before use"
       },
       {
         "node": "5090",
         "mode": "local-hermes3",
-        "suit": "suit-5090"
+        "suit": "suit-5090",
+        "url": "https://5090.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "PROVISIONAL short-name guess - node MagicDNS name never observed (tailscale down at authoring); verify before use"
       },
       {
         "node": "spark",
         "mode": "local-hermes3",
-        "suit": "suit-spark"
+        "suit": "suit-spark",
+        "url": "https://spark.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "PROVISIONAL short-name guess - node MagicDNS name never observed (tailscale down at authoring); verify before use"
       }
     ],
     "suit_source": "suit manifests embedded verbatim from the env layer (kanban t_57100539, commit a3f9c9c - content owner) by the routing layer (t_f0e9adf4); env/ files remain the authoring source of truth, this embed is the runtime copy",
-    "routing": "dispatch resolves node -> suit + tailnet serve URL from this entry at runtime (kanban t_f0e9adf4); no hardcoded node tables in harness code",
+    "routing": {
+      "note": "dispatch resolves node -> suit + tailnet serve URL from this entry at runtime (kanban t_f0e9adf4); no hardcoded node tables in harness code",
+      "serve_command": "tailscale serve --bg 7700  # on each node; fronts the Hermes gateway (fleet port 7700)",
+      "headers": {
+        "X-Hyperagint-Registry-Commit": "{live_registry_commit}",
+        "X-Hyperagint-Registry-Grounding-Commit": "{grounding_commit}"
+      },
+      "header_semantics": "live commit is stamped at runtime by the routing layer from the resolved checkout (env.shared doctrine); grounding commit is the authoring anchor from provenance.registry_commit (4b05abb) and rides every dispatched call (root-card doctrine)",
+      "fallbacks": {
+        "z890": [
+          "elder"
+        ],
+        "5090": [
+          "elder"
+        ],
+        "elder": [],
+        "spark": []
+      },
+      "fallback_semantics": "chain order = preference; first reachable hop wins; empty chain = loud failure (no silent cross-node fallback, per HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY=loud); every hop is attempted with provenance headers",
+      "url_verification": "all four url_verified=false at authoring (tailscale controlplane outage 2026-09-27); flipping to true is owned by validation card t_c368f165",
+      "source_task": "t_f0e9adf4"
+    },
     "artifact": {
       "status": "pending-release",
       "note": "windows-x86_64 zip lands with PMOVES-hermes-agent v0.21.4; the archive URL above is canonical once published"
