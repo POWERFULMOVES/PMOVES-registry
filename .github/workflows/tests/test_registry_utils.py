@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import registry_utils
 from registry_utils import (
     extract_npm_package_name,
     extract_npm_package_version,
@@ -25,6 +26,8 @@ from registry_utils import (
     strip_preview,
     subprocess_group_kwargs,
     terminate_process_group,
+    timed_read,
+    timed_readline,
     version_tuple,
 )
 
@@ -391,3 +394,122 @@ def test_terminate_process_group_kills_sigterm_ignoring_child_after_parent_exits
     time.sleep(0.6)
 
     assert not marker.exists()
+
+
+def _spawn_child(child_code: str) -> subprocess.Popen:
+    """Spawn a python child with the same pipe contract client.py uses."""
+    return subprocess.Popen(
+        [sys.executable, "-c", child_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=0,
+        **subprocess_group_kwargs(),
+    )
+
+
+def _cleanup_child(proc: subprocess.Popen) -> None:
+    terminate_process_group(proc)
+    for pipe in (proc.stdout, proc.stderr):
+        if pipe is not None:
+            pipe.close()
+
+
+class TestTimedReadlineThreadBranch:
+    """Thread-branch coverage, forced everywhere so ubuntu CI exercises it too."""
+
+    @pytest.fixture(autouse=True)
+    def _force_thread_branch(self, monkeypatch):
+        monkeypatch.setattr(registry_utils, "_TIMED_READ_USES_SELECT", False)
+
+    def test_returns_line_within_timeout(self):
+        proc = _spawn_child("print('hello', flush=True); import time; time.sleep(5)")
+        try:
+            assert timed_readline(proc.stdout, 5) == "hello\n"
+        finally:
+            _cleanup_child(proc)
+
+    def test_timeout_returns_none_without_blocking_indefinitely(self):
+        proc = _spawn_child("import time; time.sleep(5)")
+        try:
+            start = time.monotonic()
+            assert timed_readline(proc.stdout, 0.5) is None
+            elapsed = time.monotonic() - start
+            assert elapsed < 3.0
+        finally:
+            _cleanup_child(proc)
+
+    def test_eof_without_output_returns_none(self):
+        proc = _spawn_child("pass")
+        try:
+            proc.wait(timeout=5)
+            assert timed_readline(proc.stdout, 5) is None
+        finally:
+            _cleanup_child(proc)
+
+    def test_line_buffered_before_eof_survives_immediate_exit(self):
+        # Regression for the WinError 10038 card: the agent writes its
+        # handshake and exits immediately; the first read must still return
+        # the line and the second must return None without waiting out the
+        # full timeout (sentinel re-queue after EOF).
+        proc = _spawn_child('print(\'{"jsonrpc": "2.0"}\', flush=True)')
+        try:
+            assert timed_readline(proc.stdout, 5) == '{"jsonrpc": "2.0"}\n'
+
+            start = time.monotonic()
+            assert timed_readline(proc.stdout, 5) is None
+            assert time.monotonic() - start < 1.0
+        finally:
+            _cleanup_child(proc)
+
+
+class TestTimedReadThreadBranch:
+    @pytest.fixture(autouse=True)
+    def _force_thread_branch(self, monkeypatch):
+        monkeypatch.setattr(registry_utils, "_TIMED_READ_USES_SELECT", False)
+
+    def test_returns_chunk_then_eof(self):
+        proc = _spawn_child("import sys; sys.stdout.write('chunk-data'); sys.stdout.flush()")
+        try:
+            assert timed_read(proc.stdout, 5) == "chunk-data"
+
+            start = time.monotonic()
+            assert timed_read(proc.stdout, 5) is None
+            assert time.monotonic() - start < 1.0
+        finally:
+            _cleanup_child(proc)
+
+    def test_timeout_returns_none(self):
+        proc = _spawn_child("import time; time.sleep(5)")
+        try:
+            start = time.monotonic()
+            assert timed_read(proc.stdout, 0.5) is None
+            assert time.monotonic() - start < 3.0
+        finally:
+            _cleanup_child(proc)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="select() rejects pipes on Windows")
+class TestTimedReadSelectBranch:
+    """The untouched POSIX path keeps its historical behavior."""
+
+    def test_timed_readline_returns_line(self):
+        proc = _spawn_child("print('hello', flush=True); import time; time.sleep(5)")
+        try:
+            assert timed_readline(proc.stdout, 5) == "hello\n"
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_readline_timeout_returns_none(self):
+        proc = _spawn_child("import time; time.sleep(5)")
+        try:
+            assert timed_readline(proc.stdout, 0.5) is None
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_read_returns_chunk(self):
+        proc = _spawn_child("import sys; sys.stdout.write('chunk-data'); sys.stdout.flush()")
+        try:
+            assert timed_read(proc.stdout, 5) == "chunk-data"
+        finally:
+            _cleanup_child(proc)

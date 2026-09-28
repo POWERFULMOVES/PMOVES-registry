@@ -4,11 +4,14 @@ import contextlib
 import copy
 import json
 import os
+import queue
 import re
 import signal
 import subprocess
 import sys
+import threading
 import time
+import weakref
 from pathlib import Path
 
 SKIP_DIRS = {
@@ -216,6 +219,126 @@ def terminate_process_group(proc: subprocess.Popen, timeout: float = 2) -> None:
             proc.kill()
 
     _wait_for_posix_process_group_exit(proc, pgid, timeout)
+
+
+# Timed pipe IO.
+#
+# POSIX select() accepts pipes, but native Windows select() only accepts
+# sockets, so a select()-based timed read on a pipe raises OSError there
+# (WinError 10038). The POSIX branch keeps the historical select() code
+# verbatim so ubuntu CI behavior cannot drift; every other platform uses a
+# persistent per-pipe daemon reader thread feeding a queue, which provides
+# the same observable semantics without platform-specific APIs.
+#
+# Each pipe is bound to one consumption mode (timed_readline for stdout,
+# timed_read for stderr); mixing modes on one pipe interleaves buffered data.
+
+_TIMED_READ_USES_SELECT = os.name != "nt"
+_READ_CHUNK = 8192
+_READ_EOF = object()
+
+_READER_QUEUES: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+_READER_LOCK = threading.Lock()
+
+
+def _readline_worker(pipe, out_queue: queue.SimpleQueue) -> None:
+    """Forward lines from pipe to out_queue; enqueue the EOF sentinel last."""
+    try:
+        for line in iter(pipe.readline, ""):
+            out_queue.put(line)
+    except Exception:
+        # A force-closed pipe surfaces as an exception here; treating that as
+        # EOF matches the POSIX branch, where the same close makes readline
+        # return "".
+        pass
+    finally:
+        out_queue.put(_READ_EOF)
+
+
+def _readchunk_worker(pipe, out_queue: queue.SimpleQueue) -> None:
+    """Forward fixed-size chunks from pipe to out_queue; enqueue EOF sentinel last."""
+    try:
+        while True:
+            data = pipe.read(_READ_CHUNK)
+            if not data:
+                break
+            out_queue.put(data)
+    except Exception:
+        pass
+    finally:
+        out_queue.put(_READ_EOF)
+
+
+def _reader_queue_for(pipe, worker) -> queue.SimpleQueue:
+    """Return the queue served by pipe's reader thread, creating it lazily."""
+    with _READER_LOCK:
+        out_queue = _READER_QUEUES.get(pipe)
+        if out_queue is None:
+            out_queue = queue.SimpleQueue()
+            _READER_QUEUES[pipe] = out_queue
+            threading.Thread(
+                target=worker,
+                args=(pipe, out_queue),
+                name=f"registry-timed-read-{id(pipe):x}",
+                daemon=True,
+            ).start()
+        return out_queue
+
+
+def _queue_get_within(out_queue: queue.SimpleQueue, timeout: float):
+    """Get one item within timeout; None when the wait expires or EOF was seen."""
+    try:
+        item = out_queue.get(timeout=timeout)
+    except queue.Empty:
+        return None
+    if item is _READ_EOF:
+        # Exactly one consumer per queue: re-queue the sentinel so later
+        # calls return None immediately instead of blocking for the full
+        # timeout, matching the select branch's post-EOF behavior.
+        out_queue.put(_READ_EOF)
+        return None
+    return item
+
+
+def timed_readline(pipe, timeout: float) -> str | None:
+    """Read one newline-terminated line from pipe within timeout.
+
+    Returns the line including its trailing newline, or None on timeout or
+    EOF. Lines buffered before EOF stay queued ahead of the sentinel, so a
+    child that writes its handshake and exits immediately is still read
+    correctly on subsequent calls.
+    """
+    if _TIMED_READ_USES_SELECT:
+        import select
+
+        ready, _, _ = select.select([pipe], [], [], timeout)
+        if not ready:
+            return None
+        line = pipe.readline()
+        return line or None
+
+    item = _queue_get_within(_reader_queue_for(pipe, _readline_worker), timeout)
+    return item if isinstance(item, str) else None
+
+
+def timed_read(pipe, timeout: float) -> str | None:
+    """Read one buffered chunk (up to 8192 chars) from pipe within timeout.
+
+    Returns the chunk, or None when nothing arrives within timeout or the
+    pipe reaches EOF. Mirrors the select()-then-single-read() drain used for
+    stderr tail collection; chunks queued before EOF remain available to
+    subsequent calls.
+    """
+    if _TIMED_READ_USES_SELECT:
+        import select
+
+        ready, _, _ = select.select([pipe], [], [], timeout)
+        if not ready:
+            return None
+        return pipe.read(_READ_CHUNK) or None
+
+    item = _queue_get_within(_reader_queue_for(pipe, _readchunk_worker), timeout)
+    return item if isinstance(item, str) else None
 
 
 def extract_npm_package_name(package_spec: str) -> str:
