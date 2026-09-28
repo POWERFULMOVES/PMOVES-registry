@@ -138,16 +138,17 @@ def download_file(url: str, dest: Path) -> bool:
                     elapsed = time.monotonic() - started
                     if elapsed > DOWNLOAD_WALL_BUDGET_SECONDS:
                         raise ValueError(
-                            f"download stalled: {downloaded / 1024 / 1024:.1f} MB in {elapsed:.0f}s "
-                            f"(exceeded the {DOWNLOAD_WALL_BUDGET_SECONDS:.0f}s wall budget)"
+                            f"download stalled: {downloaded / 1024 / 1024:.1f} MB in "
+                            f"{elapsed:.0f}s (exceeded the "
+                            f"{DOWNLOAD_WALL_BUDGET_SECONDS:.0f}s wall budget)"
                         )
                     if (
                         elapsed > DOWNLOAD_GRACE_SECONDS
                         and downloaded / elapsed < DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC
                     ):
                         raise ValueError(
-                            f"download stalled: {downloaded / 1024:.0f} KB in {elapsed:.0f}s is below the "
-                            f"{DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
+                            f"download stalled: {downloaded / 1024:.0f} KB in {elapsed:.0f}s "
+                            f"is below the {DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
                         )
                     chunk = response.read(1024 * 1024)
                     if not chunk:
