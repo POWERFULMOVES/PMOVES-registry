@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import fcntl
 import json
 import os
 import select
@@ -470,9 +469,12 @@ def collect_stderr_tail(proc: subprocess.Popen, max_chars: int = 1200) -> str | 
 
     fd = proc.stderr.fileno()
     try:
+        # fcntl is POSIX-only; without it, skip stderr tail collection.
+        import fcntl
+
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-    except OSError:
+    except (ImportError, OSError):
         return None
 
     chunks: list[bytes] = []

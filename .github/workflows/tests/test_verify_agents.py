@@ -5,6 +5,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from verify_agents import (
     build_agent_process_env,
     build_installed_npx_command,
@@ -195,6 +197,10 @@ def test_extract_archive_allows_safe_zip_entries(tmp_path: Path):
     assert (dest / "bin" / "agent").read_text() == "#!/bin/sh\n"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="exec-bit semantics are POSIX-only; ensure_* helpers no-op on Windows",
+)
 def test_ensure_executable_adds_execute_bits(tmp_path: Path):
     binary = tmp_path / "tool"
     binary.write_text("#!/bin/sh\n")
