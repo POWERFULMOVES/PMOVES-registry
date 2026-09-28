@@ -1,14 +1,23 @@
 name: Download Lab
 
-# Dispatch-only + branch-scoped-push diagnostic (t_acad0d29, lab v3):
-# root cause isolated to client.py _collect_proc_diagnostics
-# (select-then-read(8192) blocks on a failed handshake with a live
-# child). Arms: A unpatched control under faulthandler; B PR #6's
-# queue/reader-thread path forced on Linux (legible failure expected);
-# C patched + --auth-timeout 300 (does crush authenticate given time?);
-# D partial-line buffering probe (job-level kill at 60s). This branch
-# is never opened as a PR; its push trigger fires only here, never on
-# main. Red rc is an EXPECTED outcome in A/B (captured via || echo).
+# Dispatch-only + branch-scoped-push diagnostic (t_acad0d29, lab v4).
+# v3 postmortem: arms B/C were silent no-ops (main's registry_utils has
+# no timed_read machinery; setting a nonexistent module attr is a
+# no-op), so B==A and C==unpatched+300s; the "success" greens at
+# 336/333/665s were kills at the `timeout` boundary masked by || echo.
+# v4 arms (run-level red/cancelled is EXPECTED - every job is a
+# measurement):
+#   R      main tree + non-blocking monkeypatch of client's
+#          _collect_proc_diagnostics: cure-shape demo AND first-ever
+#          look at crush's real stderr (dumped + cat'd).
+#   V6     checkout 4cd9de0 (PR #6 tree), vanilla: expect the SAME hang
+#          (timed_read keeps select+read(8192) on POSIX) - faulthandler
+#          proves "vanilla #6 doesn't fix Linux".
+#   Q6     4cd9de0 + _TIMED_READ_USES_SELECT=False (asserted, __file__
+#          printed): expect legible failure ~245s with real stderr tail.
+#   Q6-300 same + --auth-timeout 300: money arm. Green = lane curable
+#          (fix + per-agent budget); legible red = crush genuinely
+#          fails auth -> quarantine vs agent-fix vs ruling (c).
 
 on:
   push:
@@ -20,8 +29,8 @@ permissions:
   contents: read
 
 jobs:
-  a-control-faulthandler:
-    name: "A - unpatched control (faulthandler)"
+  r-fix-shape:
+    name: "R - patched collector on main tree (stderr revealed)"
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -30,9 +39,67 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Unpatched verifier, stack dump at 150s
+      - name: Non-blocking collector monkeypatch, full run
         run: |
-          timeout 330 python3 -u -X faulthandler - <<'PY' || echo "A rc=$? (124 = hung, as expected if unpatched)"
+          timeout 330 python3 -u - <<'PY' || echo "R rc=$? (red = handshake genuinely fails; legible now)"
+          import os, sys, time
+          from pathlib import Path
+          sys.path.insert(0, '.github/workflows')
+          import client
+
+          def _collect_nonblocking(proc):
+              exit_code = proc.poll()
+              stderr_tail = None
+              try:
+                  fd = proc.stderr.fileno()
+                  os.set_blocking(fd, False)
+                  chunks = []
+                  end = time.monotonic() + 0.5
+                  while time.monotonic() < end:
+                      try:
+                          data = os.read(fd, 65536)
+                      except BlockingIOError:
+                          time.sleep(0.05)
+                          continue
+                      except OSError:
+                          break
+                      if not data:
+                          break
+                      chunks.append(data)
+                  text = b"".join(chunks).decode("utf-8", errors="replace")
+                  if text:
+                      stderr_tail = text[-4000:]
+                  out = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "crush-stderr.txt"
+                  out.write_text(text or "(empty stderr)\n")
+                  print(f"[patched-collector] captured {len(text)} chars -> {out}", flush=True)
+              except Exception as e:
+                  print(f"[patched-collector] error: {type(e).__name__}: {e}", flush=True)
+              return stderr_tail, exit_code
+
+          client._collect_proc_diagnostics = _collect_nonblocking
+          import verify_agents
+          sys.argv = ['verify_agents.py', '--auth-check', '--agent', 'crush-acp']
+          verify_agents.main()
+          PY
+
+      - name: crush's actual stderr (first look)
+        if: always()
+        run: cat crush-stderr.txt 2>/dev/null || echo "(no dump produced)"
+
+  v6-vanilla-pr6:
+    name: "V6 - vanilla PR #6 tree (expect same hang on Linux)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout PR #6 head (4cd9de0)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 4cd9de03454b0870f24d9583b9ee7ce2c452bd5d
+          persist-credentials: false
+
+      - name: Vanilla #6 verifier, stack dump at 150s
+        run: |
+          timeout 330 python3 -u -X faulthandler - <<'PY' || echo "V6 rc=$? (124 + dump inside timed_read = vanilla #6 does NOT fix Linux - expected proof)"
           import sys, faulthandler
           sys.path.insert(0, '.github/workflows')
           import verify_agents
@@ -41,56 +108,56 @@ jobs:
           verify_agents.main()
           PY
 
-  b-patched-legible:
-    name: "B - #6 queue path forced (legible failure expected)"
+  q6-queue-legible:
+    name: "Q6 - #6 queue path forced (legible ~245s failure expected)"
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Checkout
+      - name: Checkout PR #6 head (4cd9de0)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: 4cd9de03454b0870f24d9583b9ee7ce2c452bd5d
           persist-credentials: false
 
-      - name: Patched verifier (reader-thread path, default 120s handshake)
+      - name: Forced queue path, default 120s handshake
         run: |
-          timeout 330 python3 -u - <<'PY' || echo "B rc=$? (red is the EXPECTED verdict; legible output is the test)"
+          timeout 330 python3 -u - <<'PY' || echo "Q6 rc=$? (red = expected legible failure w/ real stderr tail)"
           import sys
           sys.path.insert(0, '.github/workflows')
           import registry_utils
+          print("registry_utils:", registry_utils.__file__, flush=True)
+          assert hasattr(registry_utils, "_TIMED_READ_USES_SELECT"), "VOID: wrong tree - no timed_read machinery"
           registry_utils._TIMED_READ_USES_SELECT = False
+          assert registry_utils._TIMED_READ_USES_SELECT is False
+          print("queue path FORCED (asserted)", flush=True)
           import verify_agents
           sys.argv = ['verify_agents.py', '--auth-check', '--agent', 'crush-acp']
           verify_agents.main()
           PY
 
-  c-patched-longtimeout:
-    name: "C - patched + auth-timeout 300 (money arm)"
+  q6-300-money:
+    name: "Q6-300 - money arm: does crush authenticate given 300s?"
     runs-on: ubuntu-latest
-    timeout-minutes: 14
+    timeout-minutes: 18
     steps:
-      - name: Checkout
+      - name: Checkout PR #6 head (4cd9de0)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: 4cd9de03454b0870f24d9583b9ee7ce2c452bd5d
           persist-credentials: false
 
-      - name: Patched verifier, 300s handshake budget (initial + retry fits 660s)
+      - name: Forced queue path, 300s handshake (initial + retry fits 900s)
         run: |
-          timeout 660 python3 -u - <<'PY' || echo "C rc=$? (0 = crush AUTHENTICATED given time)"
+          timeout 900 python3 -u - <<'PY' || echo "Q6-300 rc=$? (0 = crush AUTHENTICATED given time -> lane curable; red legible = genuinely fails auth)"
           import sys
           sys.path.insert(0, '.github/workflows')
           import registry_utils
+          print("registry_utils:", registry_utils.__file__, flush=True)
+          assert hasattr(registry_utils, "_TIMED_READ_USES_SELECT"), "VOID: wrong tree - no timed_read machinery"
           registry_utils._TIMED_READ_USES_SELECT = False
+          assert registry_utils._TIMED_READ_USES_SELECT is False
+          print("queue path FORCED (asserted)", flush=True)
           import verify_agents
           sys.argv = ['verify_agents.py', '--auth-check', '--auth-timeout', '300', '--agent', 'crush-acp']
           verify_agents.main()
           PY
-
-  d-buffering-probe:
-    name: "D - partial-line buffering probe (expected: cancelled at 60s)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
-      - name: Complete line, then partial line, then hang until job kill
-        run: |
-          python3 -c "import sys,time; print('COMPLETE-LINE-PROBE'); sys.stdout.write('PARTIAL-LINE-PROBE'); sys.stdout.flush(); time.sleep(300)"
-          echo "never reached"
