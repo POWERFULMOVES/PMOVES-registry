@@ -45,7 +45,7 @@
           "acp"
         ]
       },
-      "windows-arm64": {
+      "windows-aarch64": {
         "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Windows_arm64.zip",
         "sha256": "5ce7c1c7ba0979b726e0a467e3e7065b565de903ee8b4f6bd5d83c8d80fc4fb9",
         "cmd": "./crush_0.91.2-pmoves.2_Windows_arm64/crush.exe",
