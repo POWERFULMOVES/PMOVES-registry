@@ -1,12 +1,10 @@
 name: Build Registry
 
-# NOTE (2026-09-28, measured): push and pull_request event triggers have
-# NEVER fired on this repo (0 runs repo-wide across 4 merges to main that
-# matched these path filters, per-workflow enable called, while sibling
-# orphaned fork POWERFULMOVES/PMOVES-crush fires normally). Only
-# workflow_dispatch executes. Until GitHub Support re-registers the event
-# pipeline (orphaned-fork candidate: upstream parent deleted), dispatch is
-# the supported road: `gh workflow run build-registry.yml --ref main`.
+# NOTE (2026-09-28, measured): push and pull_request triggers are LIVE -
+# push run 36438382725 and pull_request run 36449627354 both executed the
+# full lane set on matching path filters (this corrects an earlier NOTE
+# claiming those triggers never fired). workflow_dispatch also works for
+# manual lanes: `gh workflow run build-registry.yml --ref main`.
 on:
   push:
     branches: [main]
@@ -98,12 +96,13 @@ jobs:
     needs: build
     if: needs.build.outputs.agent_ids != '[]'
     runs-on: ubuntu-latest
-    # 5 minutes was too tight for binary-distributed agents: a 90+ MB
-    # release archive slow-dripped past the cap twice (crush-acp,
-    # 2026-09-28) while small-archive agents passed — the job died
-    # cancelled, not failed. 15 minutes keeps the gate meaningful
-    # without punishing larger binaries.
-    timeout-minutes: 15
+    # 5 minutes was too tight for binary-distributed agents: the crush-acp
+    # release asset (28.6 MB Linux x86_64, measured) slow-dripped past the
+    # cap while small-archive agents passed - the job died cancelled, not
+    # failed. 15 minutes still cancelled it 5x (<=~32 KB/s effective drip);
+    # 30 minutes tolerates >=~17 KB/s. If 30 is still short, escalate to a
+    # cache/mirror rather than raising further.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
