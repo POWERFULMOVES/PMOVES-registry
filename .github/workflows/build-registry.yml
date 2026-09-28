@@ -1,6 +1,14 @@
 name: Build Registry
 
+# NOTE (2026-09-28, measured): push and pull_request event triggers have
+# NEVER fired on this repo (0 runs repo-wide across 4 merges to main that
+# matched these path filters, per-workflow enable called, while sibling
+# orphaned fork POWERFULMOVES/PMOVES-crush fires normally). Only
+# workflow_dispatch executes. Until GitHub Support re-registers the event
+# pipeline (orphaned-fork candidate: upstream parent deleted), dispatch is
+# the supported road: `gh workflow run build-registry.yml --ref main`.
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
