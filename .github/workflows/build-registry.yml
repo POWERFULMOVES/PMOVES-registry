@@ -1,5 +1,12 @@
 name: Build Registry
 
+# NOTE (2026-09-28, measured): push and pull_request event triggers have
+# NEVER fired on this repo (0 runs repo-wide across 4 merges to main that
+# matched these path filters, per-workflow enable called, while sibling
+# orphaned fork POWERFULMOVES/PMOVES-crush fires normally). Only
+# workflow_dispatch executes. Until GitHub Support re-registers the event
+# pipeline (orphaned-fork candidate: upstream parent deleted), dispatch is
+# the supported road: `gh workflow run build-registry.yml --ref main`.
 on:
   push:
     branches: [main]
@@ -91,7 +98,12 @@ jobs:
     needs: build
     if: needs.build.outputs.agent_ids != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 5 minutes was too tight for binary-distributed agents: a 90+ MB
+    # release archive slow-dripped past the cap twice (crush-acp,
+    # 2026-09-28) while small-archive agents passed — the job died
+    # cancelled, not failed. 15 minutes keeps the gate meaningful
+    # without punishing larger binaries.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
