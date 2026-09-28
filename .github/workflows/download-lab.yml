@@ -1,10 +1,14 @@
 name: Download Lab
 
-# Dispatch-only + branch-scoped-push diagnostic (t_acad0d29): profiles
-# hosted-runner egress to the crush-acp release asset, then replicates
-# the Auth job's exact verify invocation under faulthandler. This branch
+# Dispatch-only + branch-scoped-push diagnostic (t_acad0d29, lab v3):
+# root cause isolated to client.py _collect_proc_diagnostics
+# (select-then-read(8192) blocks on a failed handshake with a live
+# child). Arms: A unpatched control under faulthandler; B PR #6's
+# queue/reader-thread path forced on Linux (legible failure expected);
+# C patched + --auth-timeout 300 (does crush authenticate given time?);
+# D partial-line buffering probe (job-level kill at 60s). This branch
 # is never opened as a PR; its push trigger fires only here, never on
-# main. Re-runs = empty-commit pushes to this branch.
+# main. Red rc is an EXPECTED outcome in A/B (captured via || echo).
 
 on:
   push:
@@ -16,54 +20,19 @@ permissions:
   contents: read
 
 jobs:
-  probe:
-    name: Egress probe
+  a-control-faulthandler:
+    name: "A - unpatched control (faulthandler)"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
-      - name: urllib progression (same stack as verify_agents.py)
-        run: |
-          python3 -u - <<'PY'
-          import time, urllib.request
-          url = "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Linux_x86_64.tar.gz"
-          req = urllib.request.Request(url, headers={"User-Agent": "ACP-Registry-Verifier/1.0"})
-          t0 = time.time(); n = 0; last = t0; lastn = 0
-          try:
-              with urllib.request.urlopen(req, timeout=60) as r:
-                  print("OPEN %.1fs status=%s len=%s" % (time.time()-t0, r.status, r.headers.get("Content-Length")), flush=True)
-                  while True:
-                      c = r.read(65536)
-                      if not c:
-                          break
-                      n += len(c)
-                      if time.time() - t0 > 180:
-                          print("BUDGET-STOP t=180s total=%.2fMB" % (n/1048576), flush=True)
-                          break
-                      if time.time() - last >= 10:
-                          w = time.time() - last
-                          print("t=%4.0fs total=%7.2fMB window=%5.0fKB/s" % (time.time()-t0, n/1048576, (n-lastn)/w/1024), flush=True)
-                          last = time.time(); lastn = n
-              print("DONE %.2fMB in %.1fs" % (n/1048576, time.time()-t0), flush=True)
-          except Exception as e:
-              print("URLLIB-FAIL t=%.0fs total=%.2fMB %s: %s" % (time.time()-t0, n/1048576, type(e).__name__, e), flush=True)
-          PY
-
-      - name: Checkout (real-command replication below needs the repo)
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # Exact Auth-job invocation (build-registry.yml "Verify auth" step),
-      # wall-clocked so a hang cannot eat the job; rc 124 = hung.
-      - name: Real verify command (Auth-job invocation, timeout-guarded)
+      - name: Unpatched verifier, stack dump at 150s
         run: |
-          timeout 300 python3 -u .github/workflows/verify_agents.py --auth-check --agent crush-acp || echo "REAL-COMMAND rc=$? (124 = hung, killed by timeout)"
-
-      # Same, but dump every thread's stack at 150s: names the exact
-      # blocked call (getaddrinfo / connect / ssl / getresponse / read).
-      - name: Faulthandler trace (exact blocked line at 150s)
-        run: |
-          timeout 300 python3 -u -X faulthandler - <<'PY' || echo "FAULTHANDLER rc=$? (124 = still hung after traceback)"
+          timeout 330 python3 -u -X faulthandler - <<'PY' || echo "A rc=$? (124 = hung, as expected if unpatched)"
           import sys, faulthandler
           sys.path.insert(0, '.github/workflows')
           import verify_agents
@@ -72,19 +41,56 @@ jobs:
           verify_agents.main()
           PY
 
-      - name: Context deltas (proxies, resolver, DNS)
-        if: always()
-        run: |
-          env | grep -iE 'proxy|request|ssl|ca_' || echo "(no proxy/ssl env vars)"
-          python3 -c "import urllib.request; print('getproxies:', urllib.request.getproxies())"
-          echo '--- /etc/resolv.conf ---'; cat /etc/resolv.conf
-          getent hosts github.com release-assets.githubusercontent.com || true
+  b-patched-legible:
+    name: "B - #6 queue path forced (legible failure expected)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: curl controls - CDN-resolved URL + cross-repo (uv) asset
+      - name: Patched verifier (reader-thread path, default 120s handshake)
         run: |
-          U="https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Linux_x86_64.tar.gz"
-          R=$(curl -4 -sI -o /dev/null -w '%{redirect_url}' "$U")
-          echo "resolved host: $(printf %s "$R" | cut -d/ -f3)"
-          curl -4 -sL -o /tmp/cdn.bin --max-time 60 -w "cdn code=%{http_code} size=%{size_download} speed=%{speed_download}B/s time=%{time_total}s\n" "$R" || echo "cdn rc=$?"
-          V="https://github.com/astral-sh/uv/releases/download/0.12.19/uv-x86_64-unknown-linux-gnu.tar.gz"
-          curl -4 -sL -o /tmp/uvctl.bin --max-time 60 -w "uv-control code=%{http_code} size=%{size_download} speed=%{speed_download}B/s time=%{time_total}s\n" "$V" || echo "uv-control rc=$?"
+          timeout 330 python3 -u - <<'PY' || echo "B rc=$? (red is the EXPECTED verdict; legible output is the test)"
+          import sys
+          sys.path.insert(0, '.github/workflows')
+          import registry_utils
+          registry_utils._TIMED_READ_USES_SELECT = False
+          import verify_agents
+          sys.argv = ['verify_agents.py', '--auth-check', '--agent', 'crush-acp']
+          verify_agents.main()
+          PY
+
+  c-patched-longtimeout:
+    name: "C - patched + auth-timeout 300 (money arm)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Patched verifier, 300s handshake budget (initial + retry fits 660s)
+        run: |
+          timeout 660 python3 -u - <<'PY' || echo "C rc=$? (0 = crush AUTHENTICATED given time)"
+          import sys
+          sys.path.insert(0, '.github/workflows')
+          import registry_utils
+          registry_utils._TIMED_READ_USES_SELECT = False
+          import verify_agents
+          sys.argv = ['verify_agents.py', '--auth-check', '--auth-timeout', '300', '--agent', 'crush-acp']
+          verify_agents.main()
+          PY
+
+  d-buffering-probe:
+    name: "D - partial-line buffering probe (expected: cancelled at 60s)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Complete line, then partial line, then hang until job kill
+        run: |
+          python3 -c "import sys,time; print('COMPLETE-LINE-PROBE'); sys.stdout.write('PARTIAL-LINE-PROBE'); sys.stdout.flush(); time.sleep(300)"
+          echo "never reached"
