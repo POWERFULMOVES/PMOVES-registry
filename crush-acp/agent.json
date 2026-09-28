@@ -2,7 +2,7 @@
   "id": "crush-acp",
   "name": "Crush",
   "version": "0.91.2-pmoves.2",
-  "description": "ACP adapter for Charm's Crush terminal coding assistant (PMOVES fork): 'crush acp' speaks stable ACP v1 JSON-RPC over stdio with streamed agent_message_chunk updates and session resume across adapter restarts; end-to-end canary verified against the live provider chain. (trigger probe)",
+  "description": "ACP adapter for Charm's Crush terminal coding assistant (PMOVES fork): 'crush acp' speaks stable ACP v1 JSON-RPC over stdio with streamed agent_message_chunk updates and session resume across adapter restarts; end-to-end canary verified against the live provider chain.",
   "repository": "https://github.com/POWERFULMOVES/PMOVES-crush",
   "website": "https://github.com/POWERFULMOVES/PMOVES-crush/blob/main/PMOVES.AI_INTEGRATION.md#acp-server-crush-acp-added-2026-09-27",
   "authors": [
