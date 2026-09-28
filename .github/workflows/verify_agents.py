@@ -6,6 +6,7 @@ Supports optional ACP auth verification via --auth-check flag.
 """
 
 import argparse
+import faulthandler
 import hashlib
 import json
 import os
@@ -38,6 +39,11 @@ try:
     HAS_AUTH_CLIENT = True
 except ImportError:
     HAS_AUTH_CLIENT = False
+
+
+# t_5cfefe27 diag: every 45s, dump all thread stacks (fd-level, unbuffered
+# stderr) so a silent stall leaves a timeline in the CI job log.
+faulthandler.dump_traceback_later(45, repeat=True)
 
 
 # Platform detection
