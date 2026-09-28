@@ -1,9 +1,10 @@
 name: Download Lab
 
 # Dispatch-only + branch-scoped-push diagnostic (t_acad0d29): profiles
-# hosted-runner egress to the crush-acp release asset. This branch is
-# never opened as a PR; the push trigger fires only on this branch and
-# can never fire on main. Re-runs = empty-commit pushes to this branch.
+# hosted-runner egress to the crush-acp release asset, then replicates
+# the Auth job's exact verify invocation under faulthandler. This branch
+# is never opened as a PR; its push trigger fires only here, never on
+# main. Re-runs = empty-commit pushes to this branch.
 
 on:
   push:
@@ -18,7 +19,7 @@ jobs:
   probe:
     name: Egress probe
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: urllib progression (same stack as verify_agents.py)
         run: |
@@ -47,12 +48,37 @@ jobs:
               print("URLLIB-FAIL t=%.0fs total=%.2fMB %s: %s" % (time.time()-t0, n/1048576, type(e).__name__, e), flush=True)
           PY
 
-      - name: curl github.com URL, v4 then v6
+      - name: Checkout (real-command replication below needs the repo)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Exact Auth-job invocation (build-registry.yml "Verify auth" step),
+      # wall-clocked so a hang cannot eat the job; rc 124 = hung.
+      - name: Real verify command (Auth-job invocation, timeout-guarded)
         run: |
-          U="https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Linux_x86_64.tar.gz"
-          for F in -4 -6; do
-            curl $F -sL -o "/tmp/c$F.bin" --max-time 60 -w "curl $F code=%{http_code} size=%{size_download} speed=%{speed_download}B/s time=%{time_total}s\n" "$U" || echo "curl $F rc=$?"
-          done
+          timeout 300 python3 -u .github/workflows/verify_agents.py --auth-check --agent crush-acp || echo "REAL-COMMAND rc=$? (124 = hung, killed by timeout)"
+
+      # Same, but dump every thread's stack at 150s: names the exact
+      # blocked call (getaddrinfo / connect / ssl / getresponse / read).
+      - name: Faulthandler trace (exact blocked line at 150s)
+        run: |
+          timeout 300 python3 -u -X faulthandler - <<'PY' || echo "FAULTHANDLER rc=$? (124 = still hung after traceback)"
+          import sys, faulthandler
+          sys.path.insert(0, '.github/workflows')
+          import verify_agents
+          faulthandler.dump_traceback_later(150)
+          sys.argv = ['verify_agents.py', '--auth-check', '--agent', 'crush-acp']
+          verify_agents.main()
+          PY
+
+      - name: Context deltas (proxies, resolver, DNS)
+        if: always()
+        run: |
+          env | grep -iE 'proxy|request|ssl|ca_' || echo "(no proxy/ssl env vars)"
+          python3 -c "import urllib.request; print('getproxies:', urllib.request.getproxies())"
+          echo '--- /etc/resolv.conf ---'; cat /etc/resolv.conf
+          getent hosts github.com release-assets.githubusercontent.com || true
 
       - name: curl controls - CDN-resolved URL + cross-repo (uv) asset
         run: |
