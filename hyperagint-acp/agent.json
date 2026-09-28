@@ -14,7 +14,8 @@
     "binary": {
       "windows-x86_64": {
         "archive": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent/releases/download/v0.21.4/hyperagint-acp-windows-x86_64.zip",
-        "cmd": "hyperagint-acp.exe"
+        "cmd": "hyperagint-acp.exe",
+        "sha256": "ef2bf60adef433f1e69dca59205f678d25f0371e46b3b4d80e2731b626534990"
       }
     }
   },
