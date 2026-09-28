@@ -126,7 +126,7 @@ def _urlopen_with_deadline(req, socket_timeout: float, deadline_s: float):
     import queue as _queue
     import threading as _threading
 
-    result: "queue.Queue[object]" = _queue.Queue(maxsize=1)
+    result = _queue.Queue(maxsize=1)
 
     def _open() -> None:
         try:
@@ -142,7 +142,7 @@ def _urlopen_with_deadline(req, socket_timeout: float, deadline_s: float):
         raise ValueError(
             f"download stalled: no connection within {deadline_s:.0f}s "
             f"(DNS/redirect phase hung past the per-socket timeout)"
-        )
+        ) from None
     if isinstance(outcome, BaseException):
         raise outcome
     return outcome
