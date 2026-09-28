@@ -148,7 +148,8 @@ def download_file(url: str, dest: Path) -> bool:
                     ):
                         raise ValueError(
                             f"download stalled: {downloaded / 1024:.0f} KB in {elapsed:.0f}s "
-                            f"is below the {DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
+                            f"is below the "
+                            f"{DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
                         )
                     chunk = response.read(1024 * 1024)
                     if not chunk:
