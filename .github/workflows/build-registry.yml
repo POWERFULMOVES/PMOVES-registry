@@ -52,7 +52,7 @@ jobs:
 
       - name: Run tests
         working-directory: .github/workflows
-        run: uv run --with pytest --with jsonschema pytest tests/ -v
+        run: uv run --with pytest --with jsonschema --with pyyaml pytest tests/ -v
 
   build:
     name: Build & Validate
@@ -126,10 +126,53 @@ jobs:
           AGENT_ID: ${{ matrix.agent_id }}
         run: python3 .github/workflows/verify_agents.py --auth-check --agent "$AGENT_ID"
 
+  # Publish lanes read every credential from repo secrets; unset secrets resolve to
+  # empty strings and used to fail the lanes opaquely at runtime (run 36445441492:
+  # create-github-app-token rejected the empty app-id; `aws s3 sync --endpoint-url ""`
+  # died in ParamValidation, exit 252). This guard fails nothing: it publishes which
+  # credential sets are present so each lane can skip itself with a notice naming the
+  # missing secret, until the operator sets the secrets (no workflow change needed).
+  publish-credentials:
+    name: Publish credential guard
+    runs-on: ubuntu-latest
+    outputs:
+      s3_configured: ${{ steps.guard.outputs.s3_configured }}
+      release_configured: ${{ steps.guard.outputs.release_configured }}
+
+    steps:
+      - name: Check publish lane secrets
+        id: guard
+        env:
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          RELEASE_PLZ_APP_ID: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          RELEASE_PLZ_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+        run: |
+          s3_ok=true
+          for var in S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT S3_BUCKET; do
+            if [ -z "${!var}" ]; then
+              s3_ok=false
+              echo "::notice::Upload to S3 lane will skip: repo secret ${var} is unset. Set it (Settings > Secrets and variables > Actions) to enable the lane; no workflow change needed."
+            fi
+          done
+
+          release_ok=true
+          for var in RELEASE_PLZ_APP_ID RELEASE_PLZ_APP_PRIVATE_KEY; do
+            if [ -z "${!var}" ]; then
+              release_ok=false
+              echo "::notice::Publish GitHub Release lane will skip: repo secret ${var} is unset. Set it (Settings > Secrets and variables > Actions) to enable the lane; no workflow change needed."
+            fi
+          done
+
+          echo "s3_configured=${s3_ok}" >> "$GITHUB_OUTPUT"
+          echo "release_configured=${release_ok}" >> "$GITHUB_OUTPUT"
+
   upload:
     name: Upload to S3
-    needs: [build, verify-auth]
-    if: always() && !failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [build, verify-auth, publish-credentials]
+    if: always() && !failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.publish-credentials.outputs.s3_configured == 'true'
     runs-on: ubuntu-latest
     env:
       S3_PREFIX: registry/v1
@@ -183,8 +226,8 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [build, verify-auth]
-    if: always() && !failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [build, verify-auth, publish-credentials]
+    if: always() && !failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.publish-credentials.outputs.release_configured == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
