@@ -513,3 +513,22 @@ class TestTimedReadSelectBranch:
             assert timed_read(proc.stdout, 5) == "chunk-data"
         finally:
             _cleanup_child(proc)
+
+    def test_partial_stderr_chunk_with_alive_child_returns_immediately(self):
+        # Regression for the Auth (crush-acp) CI hang: select() reports ready
+        # on the first stderr byte, but the historical buffered read(8192)
+        # then blocked unboundedly when the child emitted only a partial
+        # chunk and stayed alive — the CI leg burned its whole job cap. The
+        # raw-fd read must return the partial chunk immediately instead.
+        proc = _spawn_child(
+            "import sys, time; sys.stderr.write('acp: no provider config'); "
+            "sys.stderr.flush(); time.sleep(5)"
+        )
+        try:
+            start = time.monotonic()
+            chunk = timed_read(proc.stderr, 5)
+            elapsed = time.monotonic() - start
+            assert chunk == "acp: no provider config"
+            assert elapsed < 3.0
+        finally:
+            _cleanup_child(proc)

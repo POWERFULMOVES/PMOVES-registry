@@ -225,13 +225,21 @@ def terminate_process_group(proc: subprocess.Popen, timeout: float = 2) -> None:
 #
 # POSIX select() accepts pipes, but native Windows select() only accepts
 # sockets, so a select()-based timed read on a pipe raises OSError there
-# (WinError 10038). The POSIX branch keeps the historical select() code
-# verbatim so ubuntu CI behavior cannot drift; every other platform uses a
-# persistent per-pipe daemon reader thread feeding a queue, which provides
-# the same observable semantics without platform-specific APIs.
+# (WinError 10038). Line reads keep the historical select() + readline()
+# shape on POSIX (residual: a partial line without a trailing newline can
+# still block past its timeout — in CI bounded only by the job cap;
+# deliberately untouched, no observed occurrence); every other platform
+# uses a persistent per-pipe daemon reader thread feeding a queue, which
+# provides the same observable semantics without platform-specific APIs.
+# Chunk reads on POSIX use raw-fd os.read so select-readiness actually
+# bounds the read: the buffered read(8192) it replaced blocked unboundedly
+# on a partial chunk from a still-alive child and hung the Auth
+# (crush-acp) CI leg until the job cap killed it.
 #
 # Each pipe is bound to one consumption mode (timed_readline for stdout,
-# timed_read for stderr); mixing modes on one pipe interleaves buffered data.
+# timed_read for stderr); mixing modes on one pipe interleaves buffered
+# data. Raw-fd reads bypass the TextIO buffer: a pipe consumed through
+# os.read here must have no other consumer.
 
 _TIMED_READ_USES_SELECT = os.name != "nt"
 _READ_CHUNK = 8192
@@ -335,7 +343,19 @@ def timed_read(pipe, timeout: float) -> str | None:
         ready, _, _ = select.select([pipe], [], [], timeout)
         if not ready:
             return None
-        return pipe.read(_READ_CHUNK) or None
+        # select-ready on a POSIX pipe guarantees at least one byte or EOF,
+        # so os.read returns immediately with whatever is available. The
+        # historical buffered pipe.read(_READ_CHUNK) here blocked until
+        # _READ_CHUNK chars or EOF: a child that emitted a partial stderr
+        # chunk and stayed alive hung the caller unboundedly (the Auth
+        # (crush-acp) CI leg burned its whole job cap this way). Raw-fd
+        # consumption is single-consumer by contract: on POSIX this stderr
+        # pipe is read only here. Decode is utf-8/replace — the tail is
+        # diagnostic text, not data.
+        data = os.read(pipe.fileno(), _READ_CHUNK)
+        if not data:
+            return None
+        return data.decode("utf-8", errors="replace")
 
     item = _queue_get_within(_reader_queue_for(pipe, _readchunk_worker), timeout)
     return item if isinstance(item, str) else None
