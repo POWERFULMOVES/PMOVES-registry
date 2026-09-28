@@ -98,7 +98,12 @@ jobs:
     needs: build
     if: needs.build.outputs.agent_ids != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 5 minutes was too tight for binary-distributed agents: a 90+ MB
+    # release archive slow-dripped past the cap twice (crush-acp,
+    # 2026-09-28) while small-archive agents passed — the job died
+    # cancelled, not failed. 15 minutes keeps the gate meaningful
+    # without punishing larger binaries.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
