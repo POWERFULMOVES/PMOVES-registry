@@ -8,7 +8,6 @@ name: Build Registry
 # pipeline (orphaned-fork candidate: upstream parent deleted), dispatch is
 # the supported road: `gh workflow run build-registry.yml --ref main`.
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
