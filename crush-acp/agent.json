@@ -1,8 +1,8 @@
 {
   "id": "crush-acp",
   "name": "Crush",
-  "version": "0.91.2-pmoves.2",
-  "description": "ACP adapter for Charm's Crush terminal coding assistant (PMOVES fork): 'crush acp' speaks stable ACP v1 JSON-RPC over stdio with streamed agent_message_chunk updates and session resume across adapter restarts; end-to-end canary verified against the live provider chain.",
+  "version": "0.91.2",
+  "description": "ACP adapter for Charm's Crush terminal coding assistant. Stable channel tracks the PMOVES fork releases (currently v0.91.2-pmoves.2 \u2014 exact archive URLs and sha256 below): 'crush acp' speaks stable ACP v1 JSON-RPC over stdio with streamed agent_message_chunk updates and session resume across adapter restarts; end-to-end canary verified against the live provider chain.",
   "repository": "https://github.com/POWERFULMOVES/PMOVES-crush",
   "website": "https://github.com/POWERFULMOVES/PMOVES-crush/blob/main/PMOVES.AI_INTEGRATION.md#acp-server-crush-acp-added-2026-09-27",
   "authors": [
@@ -45,7 +45,7 @@
           "acp"
         ]
       },
-      "windows-arm64": {
+      "windows-aarch64": {
         "archive": "https://github.com/POWERFULMOVES/PMOVES-crush/releases/download/v0.91.2-pmoves.2/crush_0.91.2-pmoves.2_Windows_arm64.zip",
         "sha256": "5ce7c1c7ba0979b726e0a467e3e7065b565de903ee8b4f6bd5d83c8d80fc4fb9",
         "cmd": "./crush_0.91.2-pmoves.2_Windows_arm64/crush.exe",
