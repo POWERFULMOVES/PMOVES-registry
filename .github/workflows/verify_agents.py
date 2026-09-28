@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -102,9 +103,21 @@ def check_command_exists(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
+# Whole-download budget and floor (issue #11): a slow-drip transfer
+# (~100-300 KB/s observed between hosted runners and the release CDN)
+# completes every 1 MB chunk read inside the 60 s socket timeout, so the
+# per-read timeout never fires and the job dies at its timeout-minutes
+# cap as "cancelled" — indistinguishable from an infra kill. A wall
+# budget plus a rate floor converts that into a fast, legible failure.
+DOWNLOAD_WALL_BUDGET_SECONDS = 180.0
+DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC = 256 * 1024
+DOWNLOAD_GRACE_SECONDS = 30.0
+
+
 def download_file(url: str, dest: Path) -> bool:
     """Download a file from URL with progress."""
     try:
+        started = time.monotonic()
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "ACP-Registry-Verifier/1.0")
         with urllib.request.urlopen(req, timeout=60) as response:
@@ -122,6 +135,20 @@ def download_file(url: str, dest: Path) -> bool:
             downloaded = 0
             with dest.open("wb") as output:
                 while True:
+                    elapsed = time.monotonic() - started
+                    if elapsed > DOWNLOAD_WALL_BUDGET_SECONDS:
+                        raise ValueError(
+                            f"download stalled: {downloaded / 1024 / 1024:.1f} MB in {elapsed:.0f}s "
+                            f"(exceeded the {DOWNLOAD_WALL_BUDGET_SECONDS:.0f}s wall budget)"
+                        )
+                    if (
+                        elapsed > DOWNLOAD_GRACE_SECONDS
+                        and downloaded / elapsed < DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC
+                    ):
+                        raise ValueError(
+                            f"download stalled: {downloaded / 1024:.0f} KB in {elapsed:.0f}s is below the "
+                            f"{DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
+                        )
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
