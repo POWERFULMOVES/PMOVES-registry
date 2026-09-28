@@ -114,13 +114,47 @@ DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC = 256 * 1024
 DOWNLOAD_GRACE_SECONDS = 30.0
 
 
+def _urlopen_with_deadline(req, socket_timeout: float, deadline_s: float):
+    """Open a URL with a hard wall-clock deadline.
+
+    urlopen's per-socket timeout does not bound the whole connection
+    phase: DNS resolution and redirect handling can each block past it
+    (measured: a 15-minute silent hang inside urlopen on a hosted
+    runner, issue #11). The open runs on a daemon thread; if it misses
+    the deadline we abandon it and report a stall.
+    """
+    import queue as _queue
+    import threading as _threading
+
+    result: "queue.Queue[object]" = _queue.Queue(maxsize=1)
+
+    def _open() -> None:
+        try:
+            result.put(urllib.request.urlopen(req, timeout=socket_timeout))
+        except BaseException as exc:  # surfaced to the caller below
+            result.put(exc)
+
+    worker = _threading.Thread(target=_open, name="verifier-url-open", daemon=True)
+    worker.start()
+    try:
+        outcome = result.get(timeout=deadline_s)
+    except _queue.Empty:
+        raise ValueError(
+            f"download stalled: no connection within {deadline_s:.0f}s "
+            f"(DNS/redirect phase hung past the per-socket timeout)"
+        )
+    if isinstance(outcome, BaseException):
+        raise outcome
+    return outcome
+
+
 def download_file(url: str, dest: Path) -> bool:
     """Download a file from URL with progress."""
     try:
         started = time.monotonic()
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "ACP-Registry-Verifier/1.0")
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with _urlopen_with_deadline(req, 60, DOWNLOAD_WALL_BUDGET_SECONDS) as response:
             total = response.headers.get("Content-Length")
             if total:
                 total = int(total)
