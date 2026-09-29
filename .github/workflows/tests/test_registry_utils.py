@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -415,6 +416,35 @@ def _cleanup_child(proc: subprocess.Popen) -> None:
             pipe.close()
 
 
+def _run_bounded(fn, *args, deadline: float = 3.0):
+    """Run fn(*args) in a daemon thread behind a hard watchdog.
+
+    The pre-fix select branch blocks without bound on partial-bytes shapes;
+    without this harness a regression test would hang CI instead of failing.
+    A watchdog trip is therefore a deterministic failure of the bound.
+    """
+    result: list = []
+
+    def _target():
+        try:
+            result.append(fn(*args))
+        except BaseException as exc:  # transported to the test thread
+            result.append(exc)
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    worker.join(deadline)
+    if worker.is_alive():
+        pytest.fail(
+            f"{getattr(fn, '__name__', 'call')} still blocked after "
+            f"{deadline}s watchdog (unbounded read)"
+        )
+    payload = result[0]
+    if isinstance(payload, BaseException):
+        raise payload
+    return payload
+
+
 class TestTimedReadlineThreadBranch:
     """Thread-branch coverage, forced everywhere so ubuntu CI exercises it too."""
 
@@ -491,7 +521,7 @@ class TestTimedReadThreadBranch:
 
 @pytest.mark.skipif(os.name == "nt", reason="select() rejects pipes on Windows")
 class TestTimedReadSelectBranch:
-    """The untouched POSIX path keeps its historical behavior."""
+    """The POSIX production branch: select readiness + bounded raw reads."""
 
     def test_timed_readline_returns_line(self):
         proc = _spawn_child("print('hello', flush=True); import time; time.sleep(5)")
@@ -511,5 +541,74 @@ class TestTimedReadSelectBranch:
         proc = _spawn_child("import sys; sys.stdout.write('chunk-data'); sys.stdout.flush()")
         try:
             assert timed_read(proc.stdout, 5) == "chunk-data"
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_read_partial_bytes_alive_child_returns_bounded(self):
+        # CASE1 regression (the crush-acp ubuntu hang): a child that wrote
+        # 0 < n < 8192 bytes and stays alive must not wedge the read. The
+        # pre-fix buffered read(8192) blocks until EOF; the watchdog turns
+        # that shape into a failure instead of a hung CI job.
+        proc = _spawn_child(
+            "import sys, time; sys.stdout.write('partial'); sys.stdout.flush(); time.sleep(5)"
+        )
+        try:
+            start = time.monotonic()
+            assert _run_bounded(timed_read, proc.stdout, 5) == "partial"
+            assert time.monotonic() - start < 3.0
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_readline_partial_line_no_newline_times_out_bounded(self):
+        # CASE5 regression: select reports ready on any bytes, but a partial
+        # line with no newline must never block past the timeout.
+        proc = _spawn_child(
+            "import sys, time; sys.stdout.write('{\"json\":'); sys.stdout.flush(); time.sleep(5)"
+        )
+        try:
+            start = time.monotonic()
+            assert _run_bounded(timed_readline, proc.stdout, 0.5) is None
+            assert time.monotonic() - start < 3.0
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_readline_two_lines_single_write_delivered_separately(self):
+        # Parity guard: buffered readline() delivered a multi-line burst one
+        # line at a time; the raw-read branch must stash post-newline bytes
+        # and do the same.
+        proc = _spawn_child(
+            "import sys, time; sys.stdout.write('line1\\nline2\\n'); "
+            "sys.stdout.flush(); time.sleep(5)"
+        )
+        try:
+            assert _run_bounded(timed_readline, proc.stdout, 5) == "line1\n"
+            assert _run_bounded(timed_readline, proc.stdout, 5) == "line2\n"
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_readline_partial_line_then_eof_returns_tail(self):
+        # EOF parity: a final partial line without a newline is still
+        # returned, matching buffered readline() and the thread worker.
+        proc = _spawn_child("import sys; sys.stdout.write('tail'); sys.stdout.flush()")
+        try:
+            proc.wait(timeout=5)
+            assert _run_bounded(timed_readline, proc.stdout, 5) == "tail"
+        finally:
+            _cleanup_child(proc)
+
+    def test_timed_readline_partial_bytes_stashed_across_timeout(self):
+        # Client-level contract: bytes read before a timeout must survive to
+        # the next call. Dropping them would decode a truncated fragment and
+        # report a false ACP spec violation instead of completing the line.
+        proc = _spawn_child(
+            "import sys, time; "
+            "sys.stdout.write('{\"json\":'); sys.stdout.flush(); "
+            "time.sleep(1); "
+            "sys.stdout.write('\"id\":1}\\n'); sys.stdout.flush(); "
+            "time.sleep(5)"
+        )
+        try:
+            assert _run_bounded(timed_readline, proc.stdout, 0.5) is None
+            assert _run_bounded(timed_readline, proc.stdout, 5) == '{"json":"id":1}\n'
         finally:
             _cleanup_child(proc)

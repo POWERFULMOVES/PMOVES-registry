@@ -231,13 +231,18 @@ def terminate_process_group(proc: subprocess.Popen, timeout: float = 2) -> None:
 # the same observable semantics without platform-specific APIs.
 #
 # Each pipe is bound to one consumption mode (timed_readline for stdout,
-# timed_read for stderr); mixing modes on one pipe interleaves buffered data.
+# timed_read for stderr); mixing modes on one pipe interleaves buffered data
+# and (on POSIX) the readline byte stash below. One consumer per pipe.
 
 _TIMED_READ_USES_SELECT = os.name != "nt"
 _READ_CHUNK = 8192
 _READ_EOF = object()
 
 _READER_QUEUES: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+# POSIX select branch only: bytes os.read() pulled past a newline (or before
+# a timeout) wait here for the next timed_readline call on the same pipe.
+# Same single-consumer rule as _READER_QUEUES keeps the stash coherent.
+_LINE_STASHES: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 _READER_LOCK = threading.Lock()
 
 
@@ -307,27 +312,59 @@ def timed_readline(pipe, timeout: float) -> str | None:
     EOF. Lines buffered before EOF stay queued ahead of the sentinel, so a
     child that writes its handshake and exits immediately is still read
     correctly on subsequent calls.
+
+    On the POSIX select branch a raw os.read() can pull bytes past the first
+    newline; the remainder is stashed per-pipe and served by later calls, as
+    is a fragment read before a timeout. A final partial line at EOF is
+    returned, matching buffered readline().
     """
     if _TIMED_READ_USES_SELECT:
         import select
 
-        ready, _, _ = select.select([pipe], [], [], timeout)
-        if not ready:
-            return None
-        line = pipe.readline()
-        return line or None
+        deadline = time.monotonic() + timeout
+        with _READER_LOCK:
+            stash = _LINE_STASHES.get(pipe)
+            if stash is None:
+                stash = bytearray()
+                _LINE_STASHES[pipe] = stash
+        while True:
+            # Stash first: a previous call may already hold the next line,
+            # and select() would starve on the now-empty OS pipe.
+            newline = stash.find(b"\n")
+            if newline != -1:
+                line = bytes(stash[: newline + 1])
+                del stash[: newline + 1]
+                return line.decode("utf-8", errors="replace")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            ready, _, _ = select.select([pipe], [], [], remaining)
+            if not ready:
+                return None
+            try:
+                chunk = os.read(pipe.fileno(), _READ_CHUNK)
+            except (OSError, ValueError):
+                chunk = b""  # force-closed pipe behaves like EOF
+            if not chunk:
+                if stash:  # final partial line at EOF
+                    tail = bytes(stash)
+                    stash.clear()
+                    return tail.decode("utf-8", errors="replace")
+                return None
+            stash.extend(chunk)
 
     item = _queue_get_within(_reader_queue_for(pipe, _readline_worker), timeout)
     return item if isinstance(item, str) else None
 
 
 def timed_read(pipe, timeout: float) -> str | None:
-    """Read one buffered chunk (up to 8192 chars) from pipe within timeout.
+    """Read one raw chunk (up to 8192 bytes) from pipe within timeout.
 
-    Returns the chunk, or None when nothing arrives within timeout or the
-    pipe reaches EOF. Mirrors the select()-then-single-read() drain used for
-    stderr tail collection; chunks queued before EOF remain available to
-    subsequent calls.
+    Returns the chunk decoded with errors="replace", or None when nothing
+    arrives within timeout, the pipe reaches EOF, or the pipe was closed.
+    The select branch issues a single os.read() after readiness so a child
+    that emitted fewer bytes than asked for and stays alive cannot wedge the
+    caller; the thread branch keeps chunks queued for subsequent calls.
     """
     if _TIMED_READ_USES_SELECT:
         import select
@@ -335,7 +372,11 @@ def timed_read(pipe, timeout: float) -> str | None:
         ready, _, _ = select.select([pipe], [], [], timeout)
         if not ready:
             return None
-        return pipe.read(_READ_CHUNK) or None
+        try:
+            data = os.read(pipe.fileno(), _READ_CHUNK)
+        except (OSError, ValueError):
+            return None  # force-closed pipe behaves like EOF
+        return data.decode("utf-8", errors="replace") or None
 
     item = _queue_get_within(_reader_queue_for(pipe, _readchunk_worker), timeout)
     return item if isinstance(item, str) else None
