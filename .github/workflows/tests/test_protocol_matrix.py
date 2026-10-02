@@ -83,6 +83,10 @@ def test_build_initialize_params_matches_auth_probe_capabilities():
     }
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="exec-bit semantics are POSIX-only; ensure_* helpers no-op on Windows",
+)
 def test_ensure_binary_executable_sets_exec_bit(tmp_path):
     exe = tmp_path / "agent"
     exe.write_text("#!/bin/sh\n")
@@ -262,6 +266,10 @@ def test_request_with_timeout_reports_exited_process():
     assert message is None
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="select.select() cannot wait on subprocess pipes on Windows",
+)
 def test_request_with_timeout_reclassifies_timeout_when_process_exits_during_grace():
     proc = subprocess.Popen(
         [
@@ -282,6 +290,10 @@ def test_request_with_timeout_reclassifies_timeout_when_process_exits_during_gra
     assert message is None
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="select.select() cannot wait on subprocess pipes on Windows",
+)
 def test_request_with_timeout_keeps_no_response_when_process_stays_alive():
     proc = subprocess.Popen(
         [
