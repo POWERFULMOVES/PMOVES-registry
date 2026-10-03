@@ -1,0 +1,7 @@
+# Pin LF end-of-line for the HyPeRAGInT env layer regardless of core.autocrlf.
+# Suit files are sourced by POSIX shells on fleet nodes; a trailing CR from a
+# CRLF checkout would corrupt every value (HYPERAGINT_NODE=5090<CR> never
+# matches the dispatch join key). This file lives INSIDE env/ so the pattern
+# scopes to the env layer only and the entry-dir root stays untouched —
+# the root belongs to the identity layer (kanban t_0a9c4bcb).
+* text eol=lf
