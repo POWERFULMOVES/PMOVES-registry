@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -102,12 +103,58 @@ def check_command_exists(cmd: str) -> bool:
     return shutil.which(cmd) is not None
 
 
+# Whole-download budget and floor (issue #11): a slow-drip transfer
+# (~100-300 KB/s observed between hosted runners and the release CDN)
+# completes every 1 MB chunk read inside the 60 s socket timeout, so the
+# per-read timeout never fires and the job dies at its timeout-minutes
+# cap as "cancelled" — indistinguishable from an infra kill. A wall
+# budget plus a rate floor converts that into a fast, legible failure.
+DOWNLOAD_WALL_BUDGET_SECONDS = 180.0
+DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC = 256 * 1024
+DOWNLOAD_GRACE_SECONDS = 30.0
+
+
+def _urlopen_with_deadline(req, socket_timeout: float, deadline_s: float):
+    """Open a URL with a hard wall-clock deadline.
+
+    urlopen's per-socket timeout does not bound the whole connection
+    phase: DNS resolution and redirect handling can each block past it
+    (measured: a 15-minute silent hang inside urlopen on a hosted
+    runner, issue #11). The open runs on a daemon thread; if it misses
+    the deadline we abandon it and report a stall.
+    """
+    import queue as _queue
+    import threading as _threading
+
+    result = _queue.Queue(maxsize=1)
+
+    def _open() -> None:
+        try:
+            result.put(urllib.request.urlopen(req, timeout=socket_timeout))
+        except BaseException as exc:  # surfaced to the caller below
+            result.put(exc)
+
+    worker = _threading.Thread(target=_open, name="verifier-url-open", daemon=True)
+    worker.start()
+    try:
+        outcome = result.get(timeout=deadline_s)
+    except _queue.Empty:
+        raise ValueError(
+            f"download stalled: no connection within {deadline_s:.0f}s "
+            f"(DNS/redirect phase hung past the per-socket timeout)"
+        ) from None
+    if isinstance(outcome, BaseException):
+        raise outcome
+    return outcome
+
+
 def download_file(url: str, dest: Path) -> bool:
     """Download a file from URL with progress."""
     try:
+        started = time.monotonic()
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "ACP-Registry-Verifier/1.0")
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with _urlopen_with_deadline(req, 60, DOWNLOAD_WALL_BUDGET_SECONDS) as response:
             total = response.headers.get("Content-Length")
             if total:
                 total = int(total)
@@ -122,6 +169,22 @@ def download_file(url: str, dest: Path) -> bool:
             downloaded = 0
             with dest.open("wb") as output:
                 while True:
+                    elapsed = time.monotonic() - started
+                    if elapsed > DOWNLOAD_WALL_BUDGET_SECONDS:
+                        raise ValueError(
+                            f"download stalled: {downloaded / 1024 / 1024:.1f} MB in "
+                            f"{elapsed:.0f}s (exceeded the "
+                            f"{DOWNLOAD_WALL_BUDGET_SECONDS:.0f}s wall budget)"
+                        )
+                    if (
+                        elapsed > DOWNLOAD_GRACE_SECONDS
+                        and downloaded / elapsed < DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC
+                    ):
+                        raise ValueError(
+                            f"download stalled: {downloaded / 1024:.0f} KB in {elapsed:.0f}s "
+                            f"is below the "
+                            f"{DOWNLOAD_RATE_FLOOR_BYTES_PER_SEC // 1024:.0f} KB/s floor"
+                        )
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
