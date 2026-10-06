@@ -1,0 +1,190 @@
+{
+  "id": "hyperagint-acp",
+  "name": "HyPeRAGInT ACP",
+  "version": "0.21.4",
+  "description": "HyPeRAGInT edition of PMOVES Hermes Agent (MoA harness) as an ACP stdio coding agent: registry-driven identity, per-node model suits, and fleet routing",
+  "repository": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent",
+  "website": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent#readme",
+  "authors": [
+    "POWERFULMOVES"
+  ],
+  "license": "MIT",
+  "license_url": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent/blob/main/LICENSE",
+  "distribution": {
+    "binary": {
+      "windows-x86_64": {
+        "archive": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent/releases/download/v0.21.4/hyperagint-acp-windows-x86_64.zip",
+        "cmd": "hyperagint-acp.exe",
+        "sha256": "ef2bf60adef433f1e69dca59205f678d25f0371e46b3b4d80e2731b626534990"
+      }
+    }
+  },
+  "x-pmoves": {
+    "layer": "identity",
+    "edition": "HyPeRAGInT",
+    "harness": {
+      "kind": "pmoves-hermes-elder-melchor MoA",
+      "upstream": "https://github.com/POWERFULMOVES/PMOVES-hermes-agent",
+      "version_source": "hermes_cli.__version__ (PMOVES-hermes-agent main)",
+      "moa_preset": "EMHERMES",
+      "moa_models": {
+        "aggregator": "zai:glm-5.3-flash",
+        "reference": "zai:glm-5.3-flash"
+      }
+    },
+    "provenance": {
+      "registry_commit": "4b05abb",
+      "branch_point": "a5cc072",
+      "branch": "feat/hyperagint-registry-entry",
+      "task": "t_0a9c4bcb",
+      "authored": "2026-09-27",
+      "chit": "PR carries CHIT provenance; every dispatched call names registry commit 4b05abb"
+    },
+    "nodes": [
+      {
+        "node": "elder",
+        "mode": "cloud-first",
+        "suit": "suit-elder",
+        "url": "https://elder-melchor-1.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "observed MagicDNS host elder-melchor-1 (IP 100.81.62.125, tailscale status --json 2026-09-27) + tailnet tailcad9b4 (live pilot URL in PMOVES.AI docs); hostname live-confirmed on serve ports 8004/8055/8105 (404/404/401) but root URL not served (no tailscale serve rule for 7700 yet) - flip pending dispatch endpoint"
+      },
+      {
+        "node": "z890",
+        "mode": "local-hermes3",
+        "suit": "suit-z890",
+        "url": "https://pmoves-z890.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-z890 (100.113.38.37, online); prior provisional short-name z890.tailcad9b4.ts.net answered no TLS (curl 000) - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
+      },
+      {
+        "node": "5090",
+        "mode": "local-hermes3",
+        "suit": "suit-5090",
+        "url": "https://pmoves-5090.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-5090 (100.73.74.3, online); prior provisional short-name answered no TLS; corrected host answers HTTPS 404 on / from an unidentified listener - gateway identity unconfirmed, flip pending probe REACHABLE + gateway-positive fingerprint"
+      },
+      {
+        "node": "spark",
+        "mode": "local-hermes3",
+        "suit": "suit-spark",
+        "url": "https://pmoves-spark.tailcad9b4.ts.net/",
+        "url_verified": false,
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-spark (PMOVES-SPARK.local, 100.89.7.106, offline at check); prior provisional short-name answered no TLS - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
+      }
+    ],
+    "suit_source": "suit manifests embedded verbatim from the env layer (kanban t_57100539, commit a3f9c9c - content owner) by the routing layer (t_f0e9adf4); env/ files remain the authoring source of truth, this embed is the runtime copy",
+    "routing": {
+      "note": "dispatch resolves node -> suit + tailnet serve URL from this entry at runtime (kanban t_f0e9adf4); no hardcoded node tables in harness code",
+      "serve_command": "tailscale serve --bg 7700  # on each node; fronts the Hermes gateway (fleet port 7700)",
+      "headers": {
+        "X-Hyperagint-Registry-Commit": "{live_registry_commit}",
+        "X-Hyperagint-Registry-Grounding-Commit": "{grounding_commit}"
+      },
+      "header_semantics": "live commit is stamped at runtime by the routing layer from the resolved checkout (env.shared doctrine); grounding commit is the authoring anchor from provenance.registry_commit (4b05abb) and rides every dispatched call (root-card doctrine)",
+      "fallbacks": {
+        "z890": [
+          "elder"
+        ],
+        "5090": [
+          "elder"
+        ],
+        "elder": [],
+        "spark": []
+      },
+      "fallback_semantics": "chain order = preference; first reachable hop wins; empty chain = loud failure (no silent cross-node fallback, per HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY=loud); every hop is attempted with provenance headers",
+      "url_verification": "all four url_verified=false at authoring (tailscale controlplane outage 2026-09-27); flipping to true is owned by validation card t_c368f165",
+      "source_task": "t_f0e9adf4"
+    },
+    "artifact": {
+      "status": "pending-release",
+      "note": "windows-x86_64 zip lands with PMOVES-hermes-agent v0.21.4; the archive URL above is canonical once published"
+    },
+    "env_shared": {
+      "file": "env/env.shared",
+      "vars": {
+        "HYPERAGINT_HARNESS": "hyperagint-acp",
+        "HYPERAGINT_MOA_PRESET": "EMHERMES",
+        "HYPERAGINT_MOA_AGGREGATOR_PROVIDER": "zai",
+        "HYPERAGINT_MOA_AGGREGATOR_MODEL": "glm-5.3-flash",
+        "HYPERAGINT_MOA_REFERENCE_PROVIDER": "zai",
+        "HYPERAGINT_MOA_REFERENCE_MODEL": "glm-5.3-flash",
+        "HYPERAGINT_MOA_REFERENCE_COUNT": "1",
+        "HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY": "loud",
+        "HYPERAGINT_MOA_FANOUT": "per_iteration",
+        "HYPERAGINT_MOA_MAX_TOKENS": "4096",
+        "HYPERAGINT_REGISTRY_GROUNDING_COMMIT": "4b05abb"
+      }
+    },
+    "suits": {
+      "suit-elder": {
+        "file": "env/suit-elder.env",
+        "vars": {
+          "HYPERAGINT_NODE": "elder",
+          "HYPERAGINT_EXECUTION_MODE": "cloud",
+          "HYPERAGINT_MOA_PRESET": "EMHERMES",
+          "HYPERAGINT_MOA_AGGREGATOR_PROVIDER": "zai",
+          "HYPERAGINT_MOA_AGGREGATOR_MODEL": "glm-5.3-flash",
+          "HYPERAGINT_MOA_REFERENCE_PROVIDER": "zai",
+          "HYPERAGINT_MOA_REFERENCE_MODEL": "glm-5.3-flash",
+          "HYPERAGINT_MOA_REFERENCE_COUNT": "1",
+          "HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY": "loud",
+          "HYPERAGINT_MOA_FANOUT": "per_iteration",
+          "HYPERAGINT_MOA_MAX_TOKENS": "4096"
+        }
+      },
+      "suit-z890": {
+        "file": "env/suit-z890.env",
+        "vars": {
+          "HYPERAGINT_NODE": "z890",
+          "HYPERAGINT_EXECUTION_MODE": "local",
+          "HYPERAGINT_MOA_PRESET": "EMHERMES",
+          "HYPERAGINT_MOA_AGGREGATOR_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_AGGREGATOR_MODEL": "hermes3:8b",
+          "HYPERAGINT_MOA_REFERENCE_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_REFERENCE_MODEL": "hermes3:8b",
+          "HYPERAGINT_MOA_REFERENCE_COUNT": "1",
+          "HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY": "loud",
+          "HYPERAGINT_MOA_FANOUT": "per_iteration",
+          "HYPERAGINT_MOA_MAX_TOKENS": "4096",
+          "OLLAMA_HOST": "127.0.0.1:11434"
+        }
+      },
+      "suit-5090": {
+        "file": "env/suit-5090.env",
+        "vars": {
+          "HYPERAGINT_NODE": "5090",
+          "HYPERAGINT_EXECUTION_MODE": "local",
+          "HYPERAGINT_MOA_PRESET": "EMHERMES",
+          "HYPERAGINT_MOA_AGGREGATOR_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_AGGREGATOR_MODEL": "hermes3:8b",
+          "HYPERAGINT_MOA_REFERENCE_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_REFERENCE_MODEL": "hermes3:8b",
+          "HYPERAGINT_MOA_REFERENCE_COUNT": "1",
+          "HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY": "loud",
+          "HYPERAGINT_MOA_FANOUT": "per_iteration",
+          "HYPERAGINT_MOA_MAX_TOKENS": "4096",
+          "OLLAMA_HOST": "127.0.0.1:11434"
+        }
+      },
+      "suit-spark": {
+        "file": "env/suit-spark.env",
+        "vars": {
+          "HYPERAGINT_NODE": "spark",
+          "HYPERAGINT_EXECUTION_MODE": "local",
+          "HYPERAGINT_MOA_PRESET": "EMHERMES",
+          "HYPERAGINT_MOA_AGGREGATOR_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_AGGREGATOR_MODEL": "hermes3:70b",
+          "HYPERAGINT_MOA_REFERENCE_PROVIDER": "ollama",
+          "HYPERAGINT_MOA_REFERENCE_MODEL": "hermes3:70b",
+          "HYPERAGINT_MOA_REFERENCE_COUNT": "1",
+          "HYPERAGINT_MOA_DEGRADED_REFERENCE_POLICY": "loud",
+          "HYPERAGINT_MOA_FANOUT": "per_iteration",
+          "HYPERAGINT_MOA_MAX_TOKENS": "4096",
+          "OLLAMA_HOST": "127.0.0.1:11434"
+        }
+      }
+    }
+  }
+}
