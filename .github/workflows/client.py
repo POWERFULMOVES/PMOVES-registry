@@ -13,7 +13,13 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from registry_utils import sanitize_agent_env, subprocess_group_kwargs, terminate_process_group
+from registry_utils import (
+    sanitize_agent_env,
+    subprocess_group_kwargs,
+    terminate_process_group,
+    timed_read,
+    timed_readline,
+)
 
 AGENT_ENV_PASSTHROUGH = {
     "CI",
@@ -129,14 +135,8 @@ def send_jsonrpc(proc: subprocess.Popen, method: str, params: dict, msg_id: int 
 
 def read_jsonrpc(proc: subprocess.Popen, timeout: float) -> dict | None:
     """Read a JSON-RPC response from the process (raw JSON, newline-delimited)."""
-    import select
-
-    ready, _, _ = select.select([proc.stdout], [], [], timeout)
-    if not ready:
-        return None
-
-    line = proc.stdout.readline()
-    if not line:
+    line = timed_readline(proc.stdout, timeout)
+    if line is None:
         return None
 
     try:
@@ -156,17 +156,13 @@ def _collect_proc_diagnostics(proc: subprocess.Popen) -> tuple[str | None, int |
     Returns:
         (stderr_tail, exit_code) — either may be None if unavailable.
     """
-    import select
-
     exit_code = proc.poll()
 
     stderr_tail: str | None = None
     try:
-        ready, _, _ = select.select([proc.stderr], [], [], 0.5)
-        if ready:
-            data = proc.stderr.read(8192)
-            if data:
-                stderr_tail = data[-4000:]
+        data = timed_read(proc.stderr, 0.5)
+        if data:
+            stderr_tail = data[-4000:]
     except Exception:
         pass
 
