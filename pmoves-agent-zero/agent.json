@@ -1,0 +1,17 @@
+{
+  "id": "pmoves-agent-zero",
+  "name": "PMOVES Agent Zero",
+  "version": "1.19.0",
+  "description": "Agent Zero as an ACP stdio agent: editor-native sessions, workspace prompts, streaming updates, session resume/fork. Env-var API-key authentication; locates the Agent Zero framework via AGENT_ZERO_HOME (or /a0).",
+  "repository": "https://github.com/POWERFULMOVES/a0_acp",
+  "authors": [
+    "3clyp50",
+    "POWERFULMOVES"
+  ],
+  "license": "MIT",
+  "distribution": {
+    "uvx": {
+      "package": "git+https://github.com/POWERFULMOVES/a0_acp.git"
+    }
+  }
+}
