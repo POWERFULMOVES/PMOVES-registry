@@ -13,5 +13,6 @@
     "uvx": {
       "package": "git+https://github.com/POWERFULMOVES/a0_acp.git"
     }
-  }
+  },
+  "license_url": "https://github.com/POWERFULMOVES/a0_acp/blob/main/LICENSE"
 }
