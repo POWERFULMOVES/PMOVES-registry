@@ -1,0 +1,21 @@
+{
+  "id": "agent-zero-spark",
+  "name": "PMOVES Agent Zero - SPARK",
+  "version": "1.19.0",
+  "description": "SPARK instance of PMOVES Agent Zero (container pmoves-agent-zero-darkxside, 127.0.0.1:8092) over the a0_acp stdio adapter; AGENT_ZERO_CONTAINER pins the target.",
+  "repository": "https://github.com/POWERFULMOVES/a0_acp",
+  "authors": [
+    "3clyp50",
+    "POWERFULMOVES"
+  ],
+  "license": "MIT",
+  "license_url": "https://github.com/POWERFULMOVES/a0_acp/blob/main/LICENSE",
+  "distribution": {
+    "uvx": {
+      "package": "git+https://github.com/POWERFULMOVES/a0_acp.git",
+      "env": {
+        "AGENT_ZERO_CONTAINER": "pmoves-agent-zero-darkxside"
+      }
+    }
+  }
+}
