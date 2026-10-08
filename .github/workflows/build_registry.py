@@ -231,6 +231,44 @@ def validate_distribution_versions(agent_version: str, distribution: dict) -> li
     return errors
 
 
+def _github_repo_exists(gh_url: str) -> bool:
+    """Check a GitHub API repo endpoint with authenticated GET.
+
+    api.github.com rejects HEAD inconsistently and rate-limits unauthenticated
+    runner traffic (60/hour per shared IP); GITHUB_TOKEN from the workflow
+    lifts that when present. Backs off on 403/429.
+    """
+    import os
+    import time
+    import urllib.request
+
+    for attempt in range(3):
+        req = urllib.request.Request(gh_url, method="GET")
+        req.add_header("User-Agent", "ACP-Registry-Validator/1.0")
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as response:
+                return response.status == 200
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 429) and attempt < 2:
+                time.sleep(2**attempt)
+                continue
+            return False
+        except Exception:
+            if attempt < 2:
+                time.sleep(2**attempt)
+                continue
+            return False
+    return False
+
+
+def _github_api_reachable() -> bool:
+    """Control probe: is api.github.com usable from this runner right now?"""
+    return _github_repo_exists("https://api.github.com/repos/POWERFULMOVES/PMOVES-registry")
+
+
 def validate_distribution_urls(distribution: dict) -> list[str]:
     """Validate that distribution URLs exist."""
     if SKIP_URL_VALIDATION:
@@ -267,7 +305,16 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
             if m:
                 repo = m.group(1)
                 gh_url = f"https://api.github.com/repos/{repo}"
-                if not url_exists(gh_url):
+                if not _github_repo_exists(gh_url):
+                    if _github_api_reachable():
+                        errors.append(
+                            f"GitHub repository not found for git+https package: {package}"
+                        )
+                    else:
+                        print(
+                            "Warning: GitHub API unreachable or rate-limited; "
+                            f"skipped existence check: {package}"
+                        )
                     errors.append(f"GitHub repository not found for git+https package: {package}")
             else:
                 errors.append(f"Unsupported git+https spec (need github owner/repo): {package}")
