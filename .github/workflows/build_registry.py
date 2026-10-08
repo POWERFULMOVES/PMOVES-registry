@@ -274,7 +274,7 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
         else:
             pkg_name = extract_pypi_package_name(package)
             pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
-            if not url_exists(pypi_url):
+            if not url_exists(pypi_url) and not url_exists(pypi_url, method="GET"):
                 errors.append(f"PyPI package not found: {pkg_name}")
             errors.append(f"PyPI package not found: {pkg_name}")
 
@@ -285,7 +285,7 @@ def validate_icon_monochrome(root: ET.Element) -> list[str]:
     """Validate that icon uses currentColor and no hardcoded colors.
 
     Uses xml.etree.ElementTree to walk all elements, checking fill/stroke
-    attributes, inline styles, and <style> blocks Ã¢â‚¬â€ more robust than regex.
+    attributes, inline styles, and <style> blocks ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â more robust than regex.
     """
     errors = []
     has_current_color = False
