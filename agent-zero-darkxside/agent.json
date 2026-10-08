@@ -1,0 +1,21 @@
+{
+  "id": "agent-zero-darkxside",
+  "name": "PMOVES Agent Zero - darkxside",
+  "version": "1.19.0",
+  "description": "darkxside instance of PMOVES Agent Zero (first-class service agent-zero-darkxside-inst, container pmoves-agent-zero-darkxside-inst, 127.0.0.1:60937) over the a0_acp stdio adapter.",
+  "repository": "https://github.com/POWERFULMOVES/a0_acp",
+  "authors": [
+    "3clyp50",
+    "POWERFULMOVES"
+  ],
+  "license": "MIT",
+  "license_url": "https://github.com/POWERFULMOVES/a0_acp/blob/main/LICENSE",
+  "distribution": {
+    "uvx": {
+      "package": "git+https://github.com/POWERFULMOVES/a0_acp.git",
+      "env": {
+        "AGENT_ZERO_CONTAINER": "pmoves-agent-zero-darkxside-inst"
+      }
+    }
+  }
+}
