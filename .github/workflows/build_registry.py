@@ -270,7 +270,7 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
                 if not url_exists(gh_url):
                     errors.append(f"GitHub repository not found for git+https package: {package}")
             else:
-                errors.append(f"Unsupported git+https package spec (expected github.com owner/repo): {package}")
+                errors.append(f'Unsupported git+https spec (need github owner/repo): {package}')
         else:
             pkg_name = extract_pypi_package_name(package)
             pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
@@ -285,7 +285,7 @@ def validate_icon_monochrome(root: ET.Element) -> list[str]:
     """Validate that icon uses currentColor and no hardcoded colors.
 
     Uses xml.etree.ElementTree to walk all elements, checking fill/stroke
-    attributes, inline styles, and <style> blocks â€” more robust than regex.
+    attributes, inline styles, and <style> blocks Ã¢â‚¬â€ more robust than regex.
     """
     errors = []
     has_current_color = False
