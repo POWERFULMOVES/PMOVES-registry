@@ -298,7 +298,7 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
     if "uvx" in distribution:
         package = distribution["uvx"].get("package", "")
         if package.startswith("git+"):
-            m = re.match(r"git\+https://github\.com/([^/]+/[^/]+?)(?:\\.git)?(@\S+)?$", package)
+            m = re.match(r"git\+https://github\.com/([^/]+/[^/]+?)(?:\.git)?(@\S+)?$", package)
             if m:
                 repo = m.group(1)
                 gh_url = f"https://api.github.com/repos/{repo}"
