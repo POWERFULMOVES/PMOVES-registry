@@ -231,7 +231,7 @@ def validate_distribution_versions(agent_version: str, distribution: dict) -> li
     return errors
 
 
-def _github_repo_exists(gh_url: str) -> bool:
+def _github_repo_exists(gh_url: str) -> bool | None:
     """Check a GitHub API repo endpoint with authenticated GET.
 
     api.github.com rejects HEAD inconsistently and rate-limits unauthenticated
@@ -252,21 +252,18 @@ def _github_repo_exists(gh_url: str) -> bool:
             with urllib.request.urlopen(req, timeout=15) as response:
                 return response.status == 200
         except urllib.error.HTTPError as e:
-            if e.code in (403, 429) and attempt < 2:
+            if e.code == 404:
+                return False
+            if attempt < 2:
                 time.sleep(2**attempt)
                 continue
-            return False
+            return None
         except Exception:
             if attempt < 2:
                 time.sleep(2**attempt)
                 continue
-            return False
-    return False
-
-
-def _github_api_reachable() -> bool:
-    """Control probe: is api.github.com usable from this runner right now?"""
-    return _github_repo_exists("https://api.github.com/repos/POWERFULMOVES/PMOVES-registry")
+            return None
+    return None
 
 
 def validate_distribution_urls(distribution: dict) -> list[str]:
@@ -305,16 +302,16 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
             if m:
                 repo = m.group(1)
                 gh_url = f"https://api.github.com/repos/{repo}"
-                if not _github_repo_exists(gh_url):
-                    if _github_api_reachable():
-                        errors.append(
-                            f"GitHub repository not found for git+https package: {package}"
-                        )
-                    else:
-                        print(
-                            "Warning: GitHub API unreachable or rate-limited; "
-                            f"skipped existence check: {package}"
-                        )
+                exists = _github_repo_exists(gh_url)
+                if exists is False:
+                    errors.append(
+                        f"GitHub repository not found for git+https package: {package}"
+                    )
+                elif exists is None:
+                    print(
+                        "Warning: GitHub API check inconclusive (rate-limited); "
+                        f"skipped existence check: {package}"
+                    )
             else:
                 errors.append(f"Unsupported git+https spec (need github owner/repo): {package}")
         else:
@@ -882,3 +879,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     build_registry(dry_run=args.dry_run)
+
