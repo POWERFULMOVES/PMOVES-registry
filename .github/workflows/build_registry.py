@@ -258,13 +258,34 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
                 if not url_exists(npm_url):
                     errors.append(f"npm package not found: {pkg_name}")
 
-    # Check PyPI package URLs
+    # Check PyPI package URLs (skip VCS specs: uvx supports git+https, PEP 508
+    # direct references, and local paths - validate VCS targets against their host)
     if "uvx" in distribution:
         package = distribution["uvx"].get("package", "")
-        pkg_name = extract_pypi_package_name(package)
-        pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
-        if not url_exists(pypi_url):
-            errors.append(f"PyPI package not found: {pkg_name}")
+        if package.startswith("git+"):
+            m = re.match(r"git\+https://github\.com/([^/]+/[^/]+?)(?:\\.git)?(@\S+)?$", package)
+            if m:
+                repo = m.group(1)
+                gh_url = f"https://api.github.com/repos/{repo}"
+                if not url_exists(gh_url):
+                    errors.append(f"GitHub repository not found for git+https package: {package}")
+            else:
+                errors.append(f"Unsupported git+https spec (need github owner/repo): {package}")
+        else:
+            pkg_name = extract_pypi_package_name(package)
+            pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
+            if not url_exists(pypi_url) and not url_exists(pypi_url, method="GET"):
+                # pypi.org intermittently blocks/throttles datacenter runner IPs
+                # (HEAD and GET both fail for packages that verifiably exist).
+                # A known-good control package distinguishes "registry unreachable"
+                # from "package missing": only the latter fails the build.
+                if url_exists("https://pypi.org/pypi/requests/json", method="GET"):
+                    errors.append(f"PyPI package not found: {pkg_name}")
+                else:
+                    print(
+                        f"Warning: PyPI unreachable from runner; "
+                        f"skipped existence check: {pkg_name}"
+                    )
 
     return errors
 
@@ -273,7 +294,7 @@ def validate_icon_monochrome(root: ET.Element) -> list[str]:
     """Validate that icon uses currentColor and no hardcoded colors.
 
     Uses xml.etree.ElementTree to walk all elements, checking fill/stroke
-    attributes, inline styles, and <style> blocks — more robust than regex.
+    attributes, inline styles, and <style> blocks ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â more robust than regex.
     """
     errors = []
     has_current_color = False
