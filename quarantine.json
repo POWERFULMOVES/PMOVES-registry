@@ -7,5 +7,7 @@
   "vtcode": "Missing windows builds",
   "fast-agent": "Timeout after 120s waiting for initialize response",
   "mistral-vibe": "Binary archive URL not accessible",
-  "crush-acp": "ACP initialize response declares no authMethods (validator requires at least one)"
+  "crush-acp": "ACP initialize response declares no authMethods (validator requires at least one)",
+  "agent-zero-spark": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth is verified against the live instance on-node, not in CI",
+  "agent-zero-darkxside": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth is verified against the live instance on-node, not in CI"
 }
