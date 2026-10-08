@@ -304,9 +304,7 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
                 gh_url = f"https://api.github.com/repos/{repo}"
                 exists = _github_repo_exists(gh_url)
                 if exists is False:
-                    errors.append(
-                        f"GitHub repository not found for git+https package: {package}"
-                    )
+                    errors.append(f"GitHub repository not found for git+https package: {package}")
                 elif exists is None:
                     print(
                         "Warning: GitHub API check inconclusive (rate-limited); "
@@ -879,4 +877,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     build_registry(dry_run=args.dry_run)
-
