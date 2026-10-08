@@ -260,6 +260,8 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
 
     # Check PyPI package URLs (skip VCS specs: uvx supports git+https, PEP 508
     # direct references, and local paths - validate VCS targets against their host)
+    # Reachability control: see note in the uvx branch below.
+    pypi_reachable = url_exists("https://pypi.org/pypi/requests/json", method="GET")
     if "uvx" in distribution:
         package = distribution["uvx"].get("package", "")
         if package.startswith("git+"):
@@ -275,8 +277,17 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
             pkg_name = extract_pypi_package_name(package)
             pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
             if not url_exists(pypi_url) and not url_exists(pypi_url, method="GET"):
-                errors.append(f"PyPI package not found: {pkg_name}")
-            errors.append(f"PyPI package not found: {pkg_name}")
+                # pypi.org intermittently blocks/throttles datacenter runner IPs
+                # (HEAD and GET both fail for packages that verifiably exist).
+                # A known-good control package distinguishes "registry unreachable"
+                # from "package missing": only the latter fails the build.
+                if pypi_reachable:
+                    errors.append(f"PyPI package not found: {pkg_name}")
+                else:
+                    print(
+                        f"Warning: PyPI unreachable from runner; "
+                        f"skipped existence check: {pkg_name}"
+                    )
 
     return errors
 
