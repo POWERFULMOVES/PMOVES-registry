@@ -75,6 +75,8 @@ jobs:
           node-version: "lts/*"
 
       - name: Validate and build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run --with jsonschema .github/workflows/build_registry.py
 
       - name: List agents for auth matrix
