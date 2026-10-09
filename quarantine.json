@@ -10,5 +10,6 @@
   "crush-acp": "ACP initialize response declares no authMethods (validator requires at least one)",
   "agent-zero-spark": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth verified on-node",
   "agent-zero-darkxside": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth verified on-node",
-  "pmoves-agent-zero": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth verified on-node"
+  "pmoves-agent-zero": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth verified on-node",
+  "agent-zero-darkxside-vm": "Container-backed instance: adapter requires AGENT_ZERO_HOME or AGENT_ZERO_CONTAINER reachable at runtime; auth verified on-node"
 }

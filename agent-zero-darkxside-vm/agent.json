@@ -1,0 +1,21 @@
+{
+  "id": "agent-zero-darkxside-vm",
+  "name": "PMOVES Agent Zero - DARKSIDE VM",
+  "version": "1.19.0",
+  "description": "DARKSIDE lightweight VM instance of PMOVES Agent Zero (compose docker-compose.agent-zero-darkxside-vm.yml, container pmoves-agent-zero-darkxside-vm, 127.0.0.1:60938) over the a0_acp stdio adapter; AGENT_ZERO_CONTAINER pins the target.",
+  "repository": "https://github.com/POWERFULMOVES/a0_acp",
+  "authors": [
+    "3clyp50",
+    "POWERFULMOVES"
+  ],
+  "license": "MIT",
+  "license_url": "https://github.com/POWERFULMOVES/a0_acp/blob/main/LICENSE",
+  "distribution": {
+    "uvx": {
+      "package": "git+https://github.com/POWERFULMOVES/a0_acp.git",
+      "env": {
+        "AGENT_ZERO_CONTAINER": "pmoves-agent-zero-darkxside-vm"
+      }
+    }
+  }
+}
