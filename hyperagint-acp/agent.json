@@ -47,7 +47,7 @@
         "suit": "suit-elder",
         "url": "https://elder-melchor-1.tailcad9b4.ts.net/",
         "url_verified": false,
-        "url_basis": "observed MagicDNS host elder-melchor-1 (IP 100.81.62.125, tailscale status --json 2026-09-27) + tailnet tailcad9b4 (live pilot URL in PMOVES.AI docs); hostname live-confirmed on serve ports 8004/8055/8105 (404/404/401) but root URL not served (no tailscale serve rule for 7700 yet) - flip pending dispatch endpoint"
+        "url_basis": "observed MagicDNS host elder-melchor-1 (tailscale status --json 2026-09-27) + tailnet tailcad9b4 (live pilot URL in PMOVES.AI docs); hostname live-confirmed on serve ports 8004/8055/8105 (404/404/401) but root URL not served (no tailscale serve rule for 7700 yet) - flip pending dispatch endpoint"
       },
       {
         "node": "z890",
@@ -55,7 +55,7 @@
         "suit": "suit-z890",
         "url": "https://pmoves-z890.tailcad9b4.ts.net/",
         "url_verified": false,
-        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-z890 (100.113.38.37, online); prior provisional short-name z890.tailcad9b4.ts.net answered no TLS (curl 000) - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-z890 (online); prior provisional short-name z890.tailcad9b4.ts.net answered no TLS (curl 000) - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
       },
       {
         "node": "5090",
@@ -63,7 +63,7 @@
         "suit": "suit-5090",
         "url": "https://pmoves-5090.tailcad9b4.ts.net/",
         "url_verified": false,
-        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-5090 (100.73.74.3, online); prior provisional short-name answered no TLS; corrected host answers HTTPS 404 on / from an unidentified listener - gateway identity unconfirmed, flip pending probe REACHABLE + gateway-positive fingerprint"
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-5090 (online); prior provisional short-name answered no TLS; corrected host answers HTTPS 404 on / from an unidentified listener - gateway identity unconfirmed, flip pending probe REACHABLE + gateway-positive fingerprint"
       },
       {
         "node": "spark",
@@ -71,7 +71,7 @@
         "suit": "suit-spark",
         "url": "https://pmoves-spark.tailcad9b4.ts.net/",
         "url_verified": false,
-        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-spark (PMOVES-SPARK.local, 100.89.7.106, offline at check); prior provisional short-name answered no TLS - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
+        "url_basis": "corrected 2026-09-27 from live MagicDNS inventory (tailscale status --json): pmoves-spark (PMOVES-SPARK.local, offline at check); prior provisional short-name answered no TLS - endpoint not yet serving, flip pending dispatch probe + gateway fingerprint"
       }
     ],
     "suit_source": "suit manifests embedded verbatim from the env layer (kanban t_57100539, commit a3f9c9c - content owner) by the routing layer (t_f0e9adf4); env/ files remain the authoring source of truth, this embed is the runtime copy",
